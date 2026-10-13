@@ -1,0 +1,692 @@
+{
+  "dataset": "data/arxiv_data_210930-054931.csv",
+  "cleaned_dataset": "data\\processed\\papers_clean.csv",
+  "cleaning": {
+    "source_rows": 56181,
+    "exact_duplicate_rows_removed": 15054,
+    "same_title_abstract_rows_merged": 7,
+    "repeated_title_groups_with_distinct_abstracts": 16,
+    "unusable_text_rows_removed": 0,
+    "clean_rows": 41120
+  },
+  "vectorizer": {
+    "type": "TfidfVectorizer",
+    "stop_words": "english",
+    "ngram_range": [
+      1,
+      2
+    ],
+    "min_df": 2,
+    "max_features": 150000,
+    "sublinear_tf": true,
+    "dtype": "float32",
+    "title_weighting": "title repeated twice; abstract once",
+    "matrix_shape": [
+      41120,
+      150000
+    ],
+    "matrix_nnz": 5454716,
+    "matrix_sparse": true
+  },
+  "kmeans": {
+    "implementation": "MiniBatchKMeans",
+    "n_clusters": 30,
+    "batch_size": 1024,
+    "max_iter": 100,
+    "n_init": 3,
+    "random_state": 42,
+    "silhouette_cosine_sample": 2000,
+    "silhouette_cosine": 0.005541,
+    "clusters": [
+      {
+        "cluster": 0,
+        "size": 1397,
+        "top_terms": [
+          "transformer",
+          "language",
+          "attention",
+          "captioning",
+          "image",
+          "transformers",
+          "natural language",
+          "image captioning",
+          "text",
+          "self attention"
+        ],
+        "representative_title": "Multimodal Transformer with Multi-View Visual Representation for Image Captioning",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 1,
+        "size": 526,
+        "top_terms": [
+          "shot",
+          "meta",
+          "shot learning",
+          "meta learning",
+          "learning",
+          "zero shot",
+          "zero",
+          "classes",
+          "unseen",
+          "training"
+        ],
+        "representative_title": "Towards Zero-Shot Learning with Fewer Seen Class Examples",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 2,
+        "size": 1245,
+        "top_terms": [
+          "object",
+          "object detection",
+          "detection",
+          "detectors",
+          "bounding",
+          "detector",
+          "objects",
+          "box",
+          "weakly",
+          "coco"
+        ],
+        "representative_title": "Weakly Supervised Object Detection with Segmentation Collaboration",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 3,
+        "size": 290,
+        "top_terms": [
+          "remote sensing",
+          "remote",
+          "sensing",
+          "imagery",
+          "satellite",
+          "sensing images",
+          "images",
+          "satellite imagery",
+          "image",
+          "sensing image"
+        ],
+        "representative_title": "Geographical Knowledge-driven Representation Learning for Remote Sensing Images",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 4,
+        "size": 2843,
+        "top_terms": [
+          "reinforcement",
+          "reinforcement learning",
+          "policy",
+          "learning",
+          "rl",
+          "agent",
+          "reward",
+          "control",
+          "policies",
+          "algorithms"
+        ],
+        "representative_title": "Reinforcement Learning",
+        "representative_terms": [
+          "cs.LG",
+          "stat.ML"
+        ]
+      },
+      {
+        "cluster": 5,
+        "size": 361,
+        "top_terms": [
+          "person",
+          "person identification",
+          "identification",
+          "id",
+          "reid",
+          "person id",
+          "attention",
+          "identification id",
+          "features",
+          "feature"
+        ],
+        "representative_title": "Attribute-aware Identity-hard Triplet Loss for Video-based Person Re-identification",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 6,
+        "size": 3167,
+        "top_terms": [
+          "neural",
+          "neural networks",
+          "networks",
+          "deep",
+          "network",
+          "deep neural",
+          "neural network",
+          "convolutional",
+          "convolutional neural",
+          "learning"
+        ],
+        "representative_title": "Quantization of Deep Neural Networks for Accurate EdgeComputing",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 7,
+        "size": 1570,
+        "top_terms": [
+          "time series",
+          "series",
+          "time",
+          "forecasting",
+          "data",
+          "series data",
+          "multivariate",
+          "series forecasting",
+          "multivariate time",
+          "model"
+        ],
+        "representative_title": "Deep Transformer Models for Time Series Forecasting: The Influenza Prevalence Case",
+        "representative_terms": [
+          "cs.LG",
+          "stat.ML"
+        ]
+      },
+      {
+        "cluster": 8,
+        "size": 7234,
+        "top_terms": [
+          "learning",
+          "data",
+          "models",
+          "machine",
+          "machine learning",
+          "model",
+          "algorithm",
+          "based",
+          "using",
+          "methods"
+        ],
+        "representative_title": "Discovery of Latent Factors in High-dimensional Data Using Tensor Methods",
+        "representative_terms": [
+          "cs.LG"
+        ]
+      },
+      {
+        "cluster": 9,
+        "size": 780,
+        "top_terms": [
+          "depth",
+          "depth estimation",
+          "estimation",
+          "monocular",
+          "monocular depth",
+          "stereo",
+          "3d",
+          "camera",
+          "depth map",
+          "image"
+        ],
+        "representative_title": "Monocular Depth Estimation Based On Deep Learning: An Overview",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 10,
+        "size": 1204,
+        "top_terms": [
+          "reinforcement",
+          "reinforcement learning",
+          "deep reinforcement",
+          "agent",
+          "agents",
+          "learning",
+          "deep",
+          "multi agent",
+          "environment",
+          "games"
+        ],
+        "representative_title": "Scalable Centralized Deep Multi-Agent Reinforcement Learning via Policy Gradients",
+        "representative_terms": [
+          "cs.AI",
+          "cs.LG",
+          "cs.MA",
+          "stat.ML"
+        ]
+      },
+      {
+        "cluster": 11,
+        "size": 314,
+        "top_terms": [
+          "contrastive",
+          "contrastive learning",
+          "representation learning",
+          "learning",
+          "representation",
+          "supervised",
+          "self supervised",
+          "representations",
+          "self",
+          "unsupervised"
+        ],
+        "representative_title": "Mutual Contrastive Learning for Visual Representation Learning",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 12,
+        "size": 693,
+        "top_terms": [
+          "super resolution",
+          "super",
+          "resolution",
+          "image super",
+          "sr",
+          "image",
+          "low resolution",
+          "high resolution",
+          "low",
+          "images"
+        ],
+        "representative_title": "Image Super-Resolution Using Deep Convolutional Networks",
+        "representative_terms": [
+          "cs.CV",
+          "cs.NE",
+          "I.4.5; I.2.6"
+        ]
+      },
+      {
+        "cluster": 13,
+        "size": 4277,
+        "top_terms": [
+          "generative",
+          "adversarial",
+          "image",
+          "generative adversarial",
+          "images",
+          "gan",
+          "adversarial networks",
+          "gans",
+          "data",
+          "networks"
+        ],
+        "representative_title": "GAGAN: Geometry-Aware Generative Adversarial Networks",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 14,
+        "size": 4833,
+        "top_terms": [
+          "detection",
+          "object",
+          "object detection",
+          "based",
+          "image",
+          "images",
+          "network",
+          "recognition",
+          "attention",
+          "using"
+        ],
+        "representative_title": "A Framework for Fast Scalable BNN Inference using Googlenet and Transfer Learning",
+        "representative_terms": [
+          "cs.AI",
+          "cs.AR",
+          "cs.CV",
+          "cs.LG",
+          "F.2.2"
+        ]
+      },
+      {
+        "cluster": 15,
+        "size": 2283,
+        "top_terms": [
+          "graph",
+          "graphs",
+          "graph neural",
+          "node",
+          "networks",
+          "neural",
+          "gnns",
+          "nodes",
+          "neural networks",
+          "gnn"
+        ],
+        "representative_title": "Co-embedding of Nodes and Edges with Graph Neural Networks",
+        "representative_terms": [
+          "cs.CV",
+          "cs.LG"
+        ]
+      },
+      {
+        "cluster": 16,
+        "size": 1539,
+        "top_terms": [
+          "video",
+          "temporal",
+          "videos",
+          "frames",
+          "action",
+          "frame",
+          "motion",
+          "recognition",
+          "action recognition",
+          "attention"
+        ],
+        "representative_title": "Low-Latency Human Action Recognition with Weighted Multi-Region Convolutional Neural Network",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 17,
+        "size": 257,
+        "top_terms": [
+          "salient",
+          "salient object",
+          "saliency",
+          "object detection",
+          "detection",
+          "object",
+          "sod",
+          "saliency detection",
+          "salient objects",
+          "rgb salient"
+        ],
+        "representative_title": "Weakly Supervised Learning for Salient Object Detection",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 18,
+        "size": 453,
+        "top_terms": [
+          "self supervised",
+          "self",
+          "supervised",
+          "supervised learning",
+          "learning",
+          "representation learning",
+          "representation",
+          "representations",
+          "video",
+          "tasks"
+        ],
+        "representative_title": "Self-supervised Co-training for Video Representation Learning",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 19,
+        "size": 1752,
+        "top_terms": [
+          "segmentation",
+          "image segmentation",
+          "image",
+          "semantic",
+          "semantic segmentation",
+          "images",
+          "medical",
+          "medical image",
+          "method",
+          "based"
+        ],
+        "representative_title": "Deep learning and its application to medical image segmentation",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 20,
+        "size": 497,
+        "top_terms": [
+          "flow",
+          "optical flow",
+          "optical",
+          "motion",
+          "flow estimation",
+          "estimation",
+          "video",
+          "frames",
+          "frame",
+          "network"
+        ],
+        "representative_title": "A Fusion Approach for Multi-Frame Optical Flow Estimation",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 21,
+        "size": 271,
+        "top_terms": [
+          "architecture search",
+          "search",
+          "nas",
+          "neural architecture",
+          "architecture",
+          "neural",
+          "search nas",
+          "architectures",
+          "search space",
+          "space"
+        ],
+        "representative_title": "Generative Adversarial Neural Architecture Search",
+        "representative_terms": [
+          "cs.CV",
+          "cs.LG"
+        ]
+      },
+      {
+        "cluster": 22,
+        "size": 711,
+        "top_terms": [
+          "domain",
+          "adaptation",
+          "domain adaptation",
+          "target",
+          "source",
+          "target domain",
+          "transfer",
+          "domains",
+          "source domain",
+          "transfer learning"
+        ],
+        "representative_title": "Preserving Semantic Consistency in Unsupervised Domain Adaptation Using Generative Adversarial Networks",
+        "representative_terms": [
+          "cs.AI",
+          "cs.CV",
+          "cs.LG"
+        ]
+      },
+      {
+        "cluster": 23,
+        "size": 1,
+        "top_terms": [
+          "point anomaly",
+          "learning change",
+          "detection graphs",
+          "change point",
+          "statistical learning",
+          "anomaly detection",
+          "monitor",
+          "anomaly",
+          "ambulance",
+          "statistical"
+        ],
+        "representative_title": "Statistical learning for change point and anomaly detection in graphs",
+        "representative_terms": [
+          "cs.LG",
+          "stat.ME"
+        ]
+      },
+      {
+        "cluster": 24,
+        "size": 240,
+        "top_terms": [
+          "distillation",
+          "teacher",
+          "student",
+          "knowledge distillation",
+          "knowledge",
+          "teacher student",
+          "kd",
+          "student network",
+          "compression",
+          "teacher model"
+        ],
+        "representative_title": "Channel Distillation: Channel-Wise Attention for Knowledge Distillation",
+        "representative_terms": [
+          "cs.LG",
+          "stat.ML"
+        ]
+      },
+      {
+        "cluster": 25,
+        "size": 1,
+        "top_terms": [
+          "visual reasoning",
+          "neuro symbolic",
+          "symbolic visual",
+          "reasoning",
+          "vqa",
+          "neuro",
+          "perception",
+          "symbolic",
+          "visual perception",
+          "disentangling"
+        ],
+        "representative_title": "Neuro-Symbolic Visual Reasoning: Disentangling \"Visual\" from \"Reasoning\"",
+        "representative_terms": [
+          "cs.AI",
+          "cs.CV",
+          "cs.LG",
+          "cs.NE",
+          "cs.SC",
+          "stat.ML"
+        ]
+      },
+      {
+        "cluster": 26,
+        "size": 188,
+        "top_terms": [
+          "hidden",
+          "hidden markov",
+          "markov",
+          "markov models",
+          "models",
+          "graphical",
+          "graphical models",
+          "hmm",
+          "variables",
+          "markov model"
+        ],
+        "representative_title": "Stochastic Collapsed Variational Inference for Hidden Markov Models",
+        "representative_terms": [
+          "stat.ML"
+        ]
+      },
+      {
+        "cluster": 27,
+        "size": 1376,
+        "top_terms": [
+          "point",
+          "point cloud",
+          "cloud",
+          "3d",
+          "clouds",
+          "point clouds",
+          "3d point",
+          "lidar",
+          "points",
+          "segmentation"
+        ],
+        "representative_title": "ParaNet: Deep Regular Representation for 3D Point Clouds",
+        "representative_terms": [
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 28,
+        "size": 277,
+        "top_terms": [
+          "answering",
+          "question",
+          "question answering",
+          "vqa",
+          "visual question",
+          "visual",
+          "answer",
+          "language",
+          "reasoning",
+          "questions"
+        ],
+        "representative_title": "The Color of the Cat is Gray: 1 Million Full-Sentences Visual Question Answering (FSVQA)",
+        "representative_terms": [
+          "cs.CL",
+          "cs.CV"
+        ]
+      },
+      {
+        "cluster": 29,
+        "size": 540,
+        "top_terms": [
+          "regret",
+          "reinforcement",
+          "reinforcement learning",
+          "bound",
+          "algorithm",
+          "learning",
+          "bounds",
+          "bandit",
+          "policy",
+          "optimal"
+        ],
+        "representative_title": "Nearly Optimal Regret for Learning Adversarial MDPs with Linear Function Approximation",
+        "representative_terms": [
+          "cs.LG",
+          "math.OC",
+          "stat.ML"
+        ]
+      }
+    ]
+  },
+  "recommendation_evaluation": {
+    "queries_sampled": 500,
+    "queries_with_category_relevant_candidates": 500,
+    "queries_evaluated": 500,
+    "k": 10,
+    "category_overlap_proxy": {
+      "baseline": {
+        "precision": 0.9334,
+        "recall": 0.000373,
+        "diversity": 0.898795
+      },
+      "cluster_aware": {
+        "precision": 0.8716,
+        "recall": 0.000346,
+        "diversity": 0.936327
+      }
+    }
+  },
+  "limitations": [
+    "Category overlap is only a proxy for relevance; shared broad tags do not establish that a reader finds a paper useful.",
+    "The fixed random sample is a reproducible offline evaluation, not a user study or a temporal holdout.",
+    "Cluster-aware recommendations are a diversification reranking experiment; a metric change does not prove user benefit.",
+    "Silhouette is measured on a representative random sample because full cosine silhouette is quadratic."
+  ]
+}

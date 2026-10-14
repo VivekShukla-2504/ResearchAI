@@ -1,4 +1,4 @@
-# ResearchPaper AI
+﻿# ResearchPaper AI
 
 A research paper finder built around a simple question: **if I have found one useful paper, what should I read next?**
 

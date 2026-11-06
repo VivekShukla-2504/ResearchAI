@@ -99,9 +99,12 @@ function App() {
   const [bookmarkToast, setBookmarkToast] = useState(null)
   const [personalizedPapers, setPersonalizedPapers] = useState([])
   const [personalizedLoading, setPersonalizedLoading] = useState(false)
-  const [currentUser, setCurrentUser] = useState(() => api.getStoredUser())
+  const [currentUser, setCurrentUser] = useState(null)
+  const [authStatus, setAuthStatus] = useState(() => api.getStoredToken() ? 'checking' : 'required')
+  const [authGateMessage, setAuthGateMessage] = useState('')
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState('login')
+  const activeUserId = useRef(null)
 
   const bookmarkIds = useMemo(() => new Set(bookmarks.map((item) => item.paper_id)), [bookmarks])
 
@@ -136,50 +139,121 @@ function App() {
     }, 4500)
   }
 
+  function clearPrivateState() {
+    searchRequestId.current += 1
+    bookmarkRequestIds.current.clear()
+    activeUserId.current = null
+    setCurrentUser(null)
+    setView('discover')
+    setQuery('')
+    setResults([])
+    setHasSearched(false)
+    setSearchLoading(false)
+    setSelectedPaperId(null)
+    setBookmarks([])
+    setHistory([])
+    setInterests([])
+    setInterestDraft('')
+    setInterestInput('')
+    setPersonalizedPapers([])
+    setPendingBookmarkIds(new Set())
+    setActivityError('')
+    setActivityLoading(false)
+    setNotice('')
+    setBookmarkToast(null)
+  }
+
+  useEffect(() => {
+    function handleAuthExpired(event) {
+      if (!event.detail?.token || api.getStoredToken() !== event.detail.token) return
+      api.clearAuth()
+      clearPrivateState()
+      setAuthStatus('required')
+      setAuthGateMessage('Your session expired. Please sign in again.')
+    }
+    window.addEventListener('researchpaper-auth-expired', handleAuthExpired)
+    return () => window.removeEventListener('researchpaper-auth-expired', handleAuthExpired)
+  }, [])
+
   async function checkBackend() {
+    setAuthGateMessage('')
+    if (api.getStoredToken()) setAuthStatus('checking')
     try {
       const response = await api.health()
       setHealth(response)
       setBackendAvailable(true)
       const available = response.mongodb === 'available'
       setActivityAvailable(available)
-      if (api.getStoredToken()) {
-        try {
-          const me = await api.me()
-          setCurrentUser(me)
-        } catch {
+      const token = api.getStoredToken()
+      if (!token) {
+        clearPrivateState()
+        setAuthStatus('required')
+        return
+      }
+      try {
+        const me = await api.me()
+        activeUserId.current = me.user_id
+        setCurrentUser(me)
+        setAuthStatus('authenticated')
+        if (available) await loadActivity()
+      } catch (error) {
+        clearPrivateState()
+        setAuthStatus('required')
+        if (error instanceof ApiError && error.status === 401) {
           api.clearAuth()
-          setCurrentUser(null)
+          setAuthGateMessage('Your session expired. Please sign in again.')
+        } else {
+          setAuthGateMessage(error.message || 'Could not verify your account. Please retry.')
         }
       }
-      if (available) await loadActivity()
     } catch (error) {
       setBackendAvailable(false)
       setHealth(null)
       setActivityAvailable(false)
-      setNotice(error.message)
+      clearPrivateState()
+      setAuthStatus('required')
+      setAuthGateMessage(error.message || 'Could not connect to the account service.')
     }
   }
 
   function handleAuthSuccess(user, message) {
+    activeUserId.current = user.user_id
     setCurrentUser(user)
+    setAuthStatus('authenticated')
+    setAuthGateMessage('')
     showBookmarkToast('success', message)
-    loadActivity()
+    if (activityAvailable) loadActivity()
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    const token = api.getStoredToken()
+    setAuthStatus('checking')
+    clearPrivateState()
+    let revokeFailed = false
+    if (token) {
+      try {
+        await api.logout()
+      } catch {
+        revokeFailed = true
+      }
+    }
     api.clearAuth()
-    setCurrentUser(null)
-    showBookmarkToast('success', 'Signed out successfully.')
-    loadActivity()
+    clearPrivateState()
+    setAuthStatus('required')
+    setAuthGateMessage(revokeFailed
+      ? 'Signed out on this device, but the server could not revoke the token. Check your connection.'
+      : 'You have been signed out.')
   }
 
   async function loadActivity() {
+    const userId = activeUserId.current
+    if (!userId) return
     setActivityLoading(true)
     setActivityError('')
     const [bookmarkResult, historyResult, interestResult] = await Promise.allSettled([
       api.bookmarks(), api.history(), api.interests(),
     ])
+    if (activeUserId.current !== userId) return
     setActivityLoading(false)
     const failed = [bookmarkResult, historyResult, interestResult].find((item) => item.status === 'rejected')
     if (failed) {
@@ -202,14 +276,16 @@ function App() {
   }
 
   async function loadPersonalized(cat = selectedCategory) {
+    const userId = activeUserId.current
+    if (!userId) return
     setPersonalizedLoading(true)
     try {
       const response = await api.personalizedRecommendations(6, cat)
-      setPersonalizedPapers(response.recommendations || [])
+      if (activeUserId.current === userId) setPersonalizedPapers(response.recommendations || [])
     } catch {
-      setPersonalizedPapers([])
+      if (activeUserId.current === userId) setPersonalizedPapers([])
     } finally {
-      setPersonalizedLoading(false)
+      if (activeUserId.current === userId) setPersonalizedLoading(false)
     }
   }
 
@@ -377,6 +453,26 @@ function App() {
     const updated = interests.filter((term) => term.toLowerCase() !== topicToRemove.toLowerCase())
     setInterests(updated)
     setInterestDraft(updated.join('\n'))
+  }
+
+  if (authStatus === 'checking') {
+    return <div className="auth-loading-screen" role="status">
+      <span className="spinner" />
+      <span>Verifying your ResearchPaper AI account…</span>
+    </div>
+  }
+
+  if (authStatus !== 'authenticated' || !currentUser) {
+    return <AuthModal
+      isOpen
+      required
+      onClose={() => {}}
+      onAuthSuccess={handleAuthSuccess}
+      initialMode={authModalMode}
+      theme={theme}
+      gateMessage={authGateMessage}
+      onRetry={checkBackend}
+    />
   }
 
   const pageTitle = viewNames[view]

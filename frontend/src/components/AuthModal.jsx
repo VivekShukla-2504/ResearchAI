@@ -2,7 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../lib/api.js'
 import Icon from './Icon.jsx'
 
-export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode = 'login', theme = 'light' }) {
+export default function AuthModal({
+  isOpen,
+  onClose,
+  onAuthSuccess,
+  initialMode = 'login',
+  theme = 'light',
+  required = false,
+  gateMessage = '',
+  onRetry,
+}) {
   const [mode, setMode] = useState(initialMode) // 'login', 'signup', 'login-otp', 'forgot'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -201,7 +210,28 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
   }
 
   return (
-    <div className="auth-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+    <div
+      className={`auth-modal-overlay ${required ? 'auth-required-overlay' : ''}`}
+      onClick={(event) => {
+        if (!required && event.target === event.currentTarget) onClose()
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-modal-title"
+    >
+      {required && (
+        <section className="auth-gate-brand" aria-label="ResearchPaper AI">
+          <div className="auth-gate-logo"><Icon name="spark" size={19} /></div>
+          <span className="auth-gate-wordmark">ResearchPaper <strong>AI</strong></span>
+          <h1>Your next research breakthrough starts here.</h1>
+          <p>Search a curated collection of research papers, explore related work, and keep your reading organized in one private workspace.</p>
+          <div className="auth-gate-points">
+            <span><Icon name="search" size={15} /> Research discovery</span>
+            <span><Icon name="bookmark" size={15} /> A personal paper library</span>
+            <span><Icon name="spark" size={15} /> Recommendations shaped by your interests</span>
+          </div>
+        </section>
+      )}
       <div className="auth-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="auth-modal-header">
           <div className="auth-modal-brand">
@@ -216,10 +246,19 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
               </h2>
             </div>
           </div>
-          <button className="icon-button close-button" type="button" onClick={onClose} aria-label="Close dialog">
-            <Icon name="close" size={17} />
-          </button>
+          {!required && (
+            <button className="icon-button close-button" type="button" onClick={onClose} aria-label="Close dialog">
+              <Icon name="close" size={17} />
+            </button>
+          )}
         </div>
+
+        {required && (
+          <div className="auth-gate-status">
+            <p>{gateMessage || 'Sign in or create an account to continue to the research workspace.'}</p>
+            {onRetry && <button className="auth-link-secondary" type="button" onClick={onRetry}>Retry connection</button>}
+          </div>
+        )}
 
         {/* Tab switcher */}
         {(mode === 'login' || mode === 'signup') && (

@@ -74,3 +74,65 @@ test('continues requests with a stable page session when browser storage is bloc
   assert.ok(requests[0].headers['X-Session-ID'])
   assert.equal(requests[0].headers['X-Session-ID'], requests[1].headers['X-Session-ID'])
 })
+
+test('clears revoked credentials and notifies the app on protected 401 responses', async (t) => {
+  const values = new Map()
+  const authEvents = []
+  globalThis.window = {
+    localStorage: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    },
+    sessionStorage: {
+      getItem: () => null,
+      setItem: () => {},
+    },
+    dispatchEvent: (event) => authEvents.push(event),
+  }
+  globalThis.fetch = async () => new Response(JSON.stringify({ detail: 'Invalid or revoked token.' }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+  const { api } = await loadApi(t)
+  api.setAuth('revoked-token', { user_id: 'user-1' })
+  await assert.rejects(api.search('graph'), { status: 401 })
+
+  assert.equal(api.getStoredToken(), null)
+  assert.equal(authEvents.length, 1)
+  assert.equal(authEvents[0].type, 'researchpaper-auth-expired')
+  assert.equal(authEvents[0].detail.token, 'revoked-token')
+
+  api.setAuth('still-valid-token', { user_id: 'user-1' })
+  await assert.rejects(api.login('researcher@example.edu', 'wrong-password'), { status: 401 })
+  assert.equal(api.getStoredToken(), 'still-valid-token')
+  assert.equal(authEvents.length, 1)
+})
+
+test('keeps the signed-in session usable when local storage is blocked', async (t) => {
+  globalThis.window = {
+    localStorage: {
+      getItem: () => { throw new Error('storage blocked') },
+      setItem: () => { throw new Error('storage blocked') },
+      removeItem: () => { throw new Error('storage blocked') },
+    },
+    sessionStorage: {
+      getItem: () => null,
+      setItem: () => {},
+    },
+  }
+  const requests = []
+  globalThis.fetch = async (_url, options) => {
+    requests.push(options)
+    return jsonResponse()
+  }
+
+  const { api } = await loadApi(t)
+  api.setAuth('page-token', { user_id: 'user-1' })
+  await api.search('graph')
+
+  assert.equal(requests[0].headers.Authorization, 'Bearer page-token')
+  assert.equal(api.getStoredToken(), 'page-token')
+  assert.equal(api.getStoredUser().user_id, 'user-1')
+})

@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from researchpaper_ai.api import create_app
+from researchpaper_ai.auth import create_jwt
 from researchpaper_ai.data import clean_records
 from researchpaper_ai.engine import ResearchPaperRecommender
 from researchpaper_ai.mongo_store import MongoUnavailable
@@ -102,12 +103,22 @@ class MemoryActivityStore:
         user["token_version"] = user.get("token_version", 0) + 1
         return True
 
+    def revoke_user_tokens(self, user_id):
+        user = self.users.get(user_id)
+        if not user:
+            return False
+        user["token_version"] = user.get("token_version", 0) + 1
+        return True
+
     def verify_and_consume_otp(self, email, otp, purpose):
         key = (email.strip().lower(), purpose)
         if self.otps.get(key) != otp:
             return False
         del self.otps[key]
         return True
+
+    def save_otp(self, email, otp, purpose, ttl_minutes=10):
+        self.otps[(email.strip().lower(), purpose)] = otp
 
 
 def build_engine():
@@ -123,13 +134,27 @@ def build_engine():
 
 def client_for(engine=None, store=None, artifact_path=None):
     repository = store or MemoryActivityStore()
+    user = repository.create_user(
+        email="session-owner@example.edu",
+        name="Session Owner",
+        is_verified=True,
+    )
+    token = create_jwt(
+        {
+            "user_id": user["user_id"],
+            "email": user["email"],
+            "name": user["name"],
+            "token_version": user.get("token_version", 0),
+        },
+        "test-only-random-secret-for-api-tests-2026",
+    )
     app = create_app(
         model=engine,
         artifact_path=artifact_path,
         mongo_store_factory=lambda: repository,
         cors_origins=["http://localhost:5173"],
     )
-    return TestClient(app), repository
+    return TestClient(app, headers={"Authorization": f"Bearer {token}"}), repository
 
 
 @pytest.fixture(autouse=True)
@@ -197,6 +222,145 @@ def test_password_reset_revokes_existing_tokens_and_new_login_works():
         ).status_code == 200
 
 
+def test_logout_revokes_all_existing_tokens():
+    client, store = client_for(engine=build_engine())
+    with client:
+        token = client.headers["Authorization"]
+        response = client.post("/auth/logout")
+        assert response.status_code == 200
+        assert store.users["user_1"]["token_version"] == 1
+        assert client.get("/auth/me", headers={"Authorization": token}).status_code == 401
+
+
+def test_activity_is_scoped_to_authenticated_user_not_session_header():
+    engine = build_engine()
+    client, store = client_for(engine=engine)
+    paper_id = engine.papers[0].paper_id
+    store.add_bookmark("user_1", paper_id)
+    other_user = store.create_user(
+        email="other-researcher@example.edu",
+        name="Other Researcher",
+        is_verified=True,
+    )
+    other_token = create_jwt(
+        {
+            "user_id": other_user["user_id"],
+            "email": other_user["email"],
+            "name": other_user["name"],
+            "token_version": other_user.get("token_version", 0),
+        },
+        "test-only-random-secret-for-api-tests-2026",
+    )
+    with client:
+        response = client.get(
+            "/session/bookmarks",
+            headers={
+                "Authorization": f"Bearer {other_token}",
+                "X-Session-ID": "user_1",
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["bookmarks"] == []
+
+
+def test_protected_routes_reject_missing_auth_even_with_session_header():
+    engine = build_engine()
+    client, _ = client_for(engine=engine)
+    paper_id = engine.papers[0].paper_id
+    no_auth = {"Authorization": "", "X-Session-ID": "someone-elses-session"}
+    requests = [
+        ("GET", "/auth/me", {}),
+        ("POST", "/auth/logout", {}),
+        ("GET", "/papers/suggest?q=graph", {}),
+        ("GET", "/papers/search?q=graph", {}),
+        ("GET", f"/papers/{paper_id}", {}),
+        ("GET", f"/papers/{paper_id}/recommendations", {}),
+        ("GET", "/papers/recommendations/personalized", {}),
+        ("GET", "/session/recommendations", {}),
+        ("POST", "/session/bookmarks", {"json": {"paper_id": paper_id}}),
+        ("GET", "/session/bookmarks", {}),
+        ("DELETE", f"/session/bookmarks/{paper_id}", {}),
+        ("GET", "/session/search-history", {}),
+        ("GET", "/session/interests", {}),
+        ("PUT", "/session/interests", {"json": {"terms": ["graph"]}}),
+    ]
+    with client:
+        for method, path, kwargs in requests:
+            response = client.request(method, path, headers=no_auth, **kwargs)
+            assert response.status_code == 401, (method, path, response.text)
+        invalid_auth = {"Authorization": "Bearer invalid", "X-Session-ID": "someone-elses-session"}
+        assert client.get("/auth/me", headers=invalid_auth).status_code == 401
+        assert client.get("/papers/search?q=graph", headers=invalid_auth).status_code == 401
+
+
+def test_health_and_auth_recovery_routes_remain_public(monkeypatch):
+    import researchpaper_ai.api as api_module
+
+    monkeypatch.setattr(api_module, "send_otp_email", lambda *_args: False)
+    monkeypatch.setattr(api_module, "verify_google_id_token", lambda *_args, **_kwargs: None)
+    client, store = client_for(engine=build_engine())
+    no_auth = {"Authorization": ""}
+    with client:
+        assert client.get("/health", headers=no_auth).status_code == 200
+        sent = client.post(
+            "/auth/send-otp",
+            json={"email": "researcher@example.edu", "purpose": "signup"},
+            headers=no_auth,
+        )
+        assert sent.status_code == 200
+        assert client.post(
+            "/auth/login",
+            json={"email": "unknown@example.edu", "password": "wrong"},
+            headers=no_auth,
+        ).status_code == 401
+        assert client.post(
+            "/auth/login-otp",
+            json={"email": "researcher@example.edu", "otp": "000000"},
+            headers=no_auth,
+        ).status_code == 400
+        assert client.post(
+            "/auth/google",
+            json={"credential": "invalid-google-credential"},
+            headers=no_auth,
+        ).status_code == 401
+        assert client.post(
+            "/auth/signup",
+            json={
+                "name": "Researcher",
+                "email": "researcher@example.edu",
+                "password": "password",
+                "otp": "000000",
+            },
+            headers=no_auth,
+        ).status_code == 400
+        store.otps[("researcher@example.edu", "signup")] = "123456"
+        signup = client.post(
+            "/auth/signup",
+            json={
+                "name": "Researcher",
+                "email": "researcher@example.edu",
+                "password": "password",
+                "otp": "123456",
+            },
+            headers=no_auth,
+        )
+        assert signup.status_code == 200
+        assert client.post(
+            "/auth/login",
+            json={"email": "researcher@example.edu", "password": "password"},
+            headers=no_auth,
+        ).status_code == 200
+        assert client.post(
+            "/auth/reset-password",
+            json={
+                "email": "researcher@example.edu",
+                "otp": "000000",
+                "new_password": "new-password",
+            },
+            headers=no_auth,
+        ).status_code == 400
+
+
 def test_search_details_and_recommendations():
     engine = build_engine()
     client, store = client_for(engine=engine)
@@ -232,7 +396,7 @@ def test_missing_paper_and_request_validation():
         assert client.get("/papers/no-such-paper/recommendations").status_code == 404
         assert client.get("/papers/search", params={"q": "  "}).status_code == 422
         assert client.get("/papers/search", params={"q": "graph", "limit": 0}).status_code == 422
-        assert client.get("/papers/search", params={"q": "graph"}, headers={"X-Session-ID": "bad id"}).status_code == 422
+        assert client.get("/papers/search", params={"q": "graph"}, headers={"X-Session-ID": "bad id"}).status_code == 200
         assert client.get("/papers/search", params={"q": "graph" * 130}).status_code == 422
         assert client.post("/session/bookmarks", json={"paper_id": "   "}).status_code == 422
         assert client.get("/papers/search", params={"q": "graph"}, headers={"Origin": "http://localhost:5173"}).headers["access-control-allow-origin"] == "http://localhost:5173"

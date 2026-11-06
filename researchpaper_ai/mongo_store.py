@@ -217,6 +217,18 @@ class MongoStore:
         )
         return result.modified_count > 0
 
+    def revoke_user_tokens(self, user_id: str) -> bool:
+        result = self._run(
+            lambda: self._collection("users").update_one(
+                {"user_id": user_id},
+                {
+                    "$inc": {"token_version": 1},
+                    "$set": {"updated_at": datetime.now(timezone.utc)},
+                },
+            )
+        )
+        return result.modified_count > 0
+
     def save_otp(self, email: str, otp: str, purpose: str, ttl_minutes: int = 10) -> None:
         clean = email.strip().lower()
         now = datetime.now(timezone.utc)

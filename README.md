@@ -177,25 +177,31 @@ FastAPI's interactive API reference is available at `/docs` while the server is 
 | Method | Route | Purpose |
 |---|---|---|
 | `GET` | `/health` | Model and MongoDB availability |
+| `POST` | `/auth/signup`, `/auth/login`, `/auth/login-otp`, `/auth/google` | Create an account or sign in |
+| `POST` | `/auth/send-otp`, `/auth/reset-password` | Public account verification and recovery |
+| `GET` | `/auth/me` | Verify the current bearer token and return its profile |
+| `POST` | `/auth/logout` | Revoke the current user's existing tokens |
+| `GET` | `/papers/suggest?q=...` | Suggest search phrases |
 | `GET` | `/papers/search?q=...&limit=...` | Search and, when possible, record the query |
 | `GET` | `/papers/{paper_id}` | Return paper details |
 | `GET` | `/papers/{paper_id}/recommendations?k=10` | Return similar papers and similarity scores |
-| `POST` | `/session/bookmarks` | Save a paper for the current session |
+| `GET` | `/papers/recommendations/personalized` | Recommend papers using the signed-in user's activity |
+| `POST` | `/session/bookmarks` | Save a paper to the signed-in user's library |
 | `GET` | `/session/bookmarks` | List saved papers |
 | `DELETE` | `/session/bookmarks/{paper_id}` | Remove a saved paper |
-| `GET` | `/session/search-history` | Read recent session searches |
-| `GET` | `/session/interests` | Read saved session interests |
-| `PUT` | `/session/interests` | Replace saved session interests |
+| `GET` | `/session/search-history` | Read recent account searches |
+| `GET` | `/session/interests` | Read saved account interests |
+| `PUT` | `/session/interests` | Replace saved account interests |
 
 Search query length is limited to 1–512 characters; search limits and recommendation `k` are 1–50. Activity-list limits are 1–100. Invalid input returns HTTP 422, and unknown papers return HTTP 404. Recommendation values are cosine similarity scores—not probabilities or accuracy.
 
-## Activity storage and session behavior
+Paper and activity routes, along with `/auth/me` and `/auth/logout`, require a valid bearer token. Health and account creation, sign-in, OTP, Google, and password recovery routes remain public so users can authenticate. The frontend validates a stored token before rendering the workspace; missing, expired, or revoked tokens return the user to the sign-in screen.
 
-MongoDB stores only three kinds of activity: bookmarks, search history, and research interests. Paper text and the 41,120-record corpus stay in the model artifact and cleaned dataset.
+## Activity storage and account behavior
 
-The browser uses an anonymous session ID for activity requests. It is a label for local/session-based behavior, **not a login or secure authentication mechanism**; a caller can choose or spoof an ID. Do not use it as account security or assume it provides private multi-user isolation.
+MongoDB stores only three kinds of account activity: bookmarks, search history, and research interests. Activity ownership is derived from the validated JWT user ID; the client-supplied `X-Session-ID` header is not used for authentication or isolation. Paper text and the 41,120-record corpus stay in the model artifact and cleaned dataset.
 
-If MongoDB is unavailable, `/health` reports a degraded state. Search and recommendations remain available, but activity routes return HTTP 503 and search responses indicate that history was not saved. There is no automatic retention policy for activity documents; plan cleanup appropriate to your use.
+If MongoDB is unavailable, `/health` reports a degraded state. A valid signed-in user can still search and receive paper recommendations, but activity routes return HTTP 503 and search responses indicate that history was not saved. Logout revokes all of that user's outstanding tokens. There is no automatic retention policy for activity documents; plan cleanup appropriate to your use.
 
 ## Tests and current verification
 
@@ -212,14 +218,14 @@ npm.cmd test
 npm.cmd run build
 ```
 
-Latest recorded local verification: **25 backend tests passed**, **5 frontend tests passed**, and the production Vite build succeeded. The Python run reports one non-failing Starlette/HTTPX deprecation warning. Tests cover backend logic and frontend API/session/bookmark helpers; they do not replace a live MongoDB persistence check or a browser-based accessibility and responsive-layout review.
+Latest local verification: **47 backend tests passed**, **7 frontend tests passed**, and the production Vite build succeeded. The Python run reports one non-failing Starlette/HTTPX deprecation warning. Tests cover backend logic and frontend API/session/bookmark helpers; the mandatory sign-in gate was also checked in desktop and mobile browser layouts. These checks do not replace a live MongoDB persistence check.
 
 ## Current limitations
 
 - There are no human-annotated relevance judgments or user-study results.
 - The category field is multi-label and inconsistent; category overlap is only a weak evaluation proxy.
 - Internal paper IDs are content-derived because the source does not provide a paper ID column.
-- Anonymous session IDs are not authentication.
+- Users must sign in or create an account before accessing paper search and activity features.
 - MongoDB persistence depends on a separately configured MongoDB service.
 - The fitted artifact is excluded from Git and must be supplied or built before API startup.
 - K-Means did not demonstrate a recommendation-quality improvement over the baseline in the measured proxy evaluation.

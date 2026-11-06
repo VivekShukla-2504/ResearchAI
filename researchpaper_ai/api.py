@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Annotated, Callable
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Path as ApiPath, Query, Request, status
+from fastapi import FastAPI, HTTPException, Path as ApiPath, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
@@ -227,18 +227,6 @@ class AuthResponse(BaseModel):
     message: str = "Authenticated successfully"
 
 
-SessionId = Annotated[
-    str,
-    Header(
-        alias="X-Session-ID",
-        min_length=1,
-        max_length=64,
-        pattern=r"^[A-Za-z0-9._:-]+$",
-        description="Untrusted local-development session label; not authentication.",
-    ),
-]
-
-
 def _resolve_path(path: str | Path) -> Path:
     resolved = Path(path)
     return resolved if resolved.is_absolute() else PROJECT_ROOT / resolved
@@ -292,8 +280,8 @@ def create_app(
     application = FastAPI(
         title="ResearchPaper AI API",
         description=(
-            "Local research-paper search and recommendations using the fitted Phase 2 model. "
-            "Activity persistence is anonymous and is not an authentication system."
+            "Authenticated research-paper search and recommendations using the fitted Phase 2 model. "
+            "Account activity is scoped to the signed-in user."
         ),
         version="0.3.0",
         lifespan=lifespan,
@@ -325,28 +313,37 @@ def create_app(
             )
         return store
 
-    def identity_for(request: Request, session_id: str | None = None) -> tuple[dict | None, str]:
+    def identity_for(request: Request) -> tuple[dict, str]:
         auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header[7:].strip()
-            payload = decode_jwt(token, request.app.state.jwt_secret)
-            if payload and "user_id" in payload:
-                store = request.app.state.mongo
-                if store.available:
-                    try:
-                        user = store.get_user_by_id(str(payload["user_id"]))
-                    except MongoUnavailable:
-                        user = None
-                    if user:
-                        try:
-                            token_version = int(payload.get("token_version", 0) or 0)
-                            current_version = int(user.get("token_version", 0) or 0)
-                        except (TypeError, ValueError):
-                            user = None
-                        else:
-                            if token_version == current_version:
-                                return payload, str(payload["user_id"])
-        return None, session_id or "local-anonymous"
+        token = auth_header[7:].strip() if auth_header and auth_header.startswith("Bearer ") else ""
+        payload = decode_jwt(token, request.app.state.jwt_secret) if token else None
+        if not payload or not payload.get("user_id"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user_id = str(payload["user_id"])
+        store = request.app.state.mongo
+        if store.available:
+            database_unavailable = False
+            try:
+                user = store.get_user_by_id(user_id)
+            except MongoUnavailable:
+                user = None
+                database_unavailable = True
+            if user is None and not database_unavailable:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or revoked token.")
+            if user is not None:
+                try:
+                    token_version = int(payload.get("token_version", 0) or 0)
+                    current_version = int(user.get("token_version", 0) or 0)
+                except (TypeError, ValueError) as exc:
+                    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.") from exc
+                if token_version != current_version:
+                    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or revoked token.")
+        return payload, user_id
 
     def issue_token(request: Request, user: dict) -> str:
         days = int(os.getenv("JWT_EXPIRES_DAYS", "7"))
@@ -454,11 +451,12 @@ def create_app(
     @application.get("/auth/me", response_model=UserProfile)
     def get_current_user_profile(request: Request) -> UserProfile:
         user_payload, _ = identity_for(request)
-        if not user_payload:
-            raise HTTPException(status_code=401, detail="Authentication required.")
         store = request.app.state.mongo
         if store.available:
-            db_user = store.get_user_by_id(user_payload["user_id"])
+            try:
+                db_user = store.get_user_by_id(user_payload["user_id"])
+            except MongoUnavailable:
+                db_user = None
             if db_user:
                 db_user.pop("password_hash", None)
                 return UserProfile(**db_user)
@@ -468,6 +466,17 @@ def create_app(
             name=user_payload.get("name", "Researcher"),
             auth_provider="jwt",
         )
+
+    @application.post("/auth/logout")
+    def logout(request: Request) -> dict:
+        _, user_id = identity_for(request)
+        store = mongo_for(request)
+        try:
+            if not store.revoke_user_tokens(user_id):
+                raise HTTPException(status_code=401, detail="Invalid or revoked token.")
+        except MongoUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        return {"message": "Signed out successfully."}
 
     @application.post("/auth/reset-password")
     def reset_password(payload: ResetPasswordRequest, request: Request) -> dict:
@@ -500,6 +509,7 @@ def create_app(
         q: Annotated[str, Query(min_length=1, max_length=100)],
         limit: Annotated[int, Query(ge=1, le=10)] = 6,
     ) -> SuggestResponse:
+        identity_for(request)
         engine = engine_for(request)
         suggestions = engine.suggest(prefix=q, limit=limit)
         return SuggestResponse(query=q, suggestions=suggestions)
@@ -510,8 +520,8 @@ def create_app(
         q: Annotated[str, Query(min_length=1, max_length=512)],
         category: Annotated[str | None, Query(max_length=64)] = None,
         limit: Annotated[int, Query(ge=1, le=50)] = 10,
-        session_id: SessionId = "local-anonymous",
     ) -> SearchResponse:
+        _, identity_id = identity_for(request)
         query = q.strip()
         if not query:
             raise HTTPException(status_code=422, detail="Query must contain non-whitespace text.")
@@ -519,7 +529,6 @@ def create_app(
         results = engine.recommend(query=query, category=category, top_k=limit)
         history_saved = False
         store = request.app.state.mongo
-        _, identity_id = identity_for(request, session_id)
         if store.available:
             try:
                 store.add_search(identity_id, query, len(results))
@@ -532,6 +541,7 @@ def create_app(
     def get_paper(
         paper_id: Annotated[str, ApiPath(min_length=1, max_length=80)], request: Request
     ) -> PaperDetails:
+        identity_for(request)
         engine = engine_for(request)
         index = engine.id_to_index.get(paper_id)
         if index is None:
@@ -545,6 +555,7 @@ def create_app(
         category: Annotated[str | None, Query(max_length=64)] = None,
         k: Annotated[int, Query(ge=1, le=50)] = 10,
     ) -> RecommendationResponse:
+        identity_for(request)
         engine = engine_for(request)
         try:
             recommendations = engine.recommend(paper_id=paper_id, category=category, top_k=k)
@@ -558,13 +569,12 @@ def create_app(
         request: Request,
         category: Annotated[str | None, Query(max_length=64)] = None,
         k: Annotated[int, Query(ge=1, le=50)] = 10,
-        session_id: SessionId = "local-anonymous",
     ) -> PersonalizedResponse:
+        _, identity_id = identity_for(request)
         engine = engine_for(request)
         store = request.app.state.mongo
         bookmarked_ids: list[str] = []
         interest_terms: list[str] = []
-        _, identity_id = identity_for(request, session_id)
         if store.available:
             try:
                 bookmarks = store.list_bookmarks(identity_id, limit=50)
@@ -590,15 +600,13 @@ def create_app(
         )
 
     @application.post("/session/bookmarks", response_model=BookmarkEntry, status_code=201)
-    def add_bookmark(
-        payload: BookmarkRequest, request: Request, session_id: SessionId = "local-anonymous"
-    ) -> BookmarkEntry:
+    def add_bookmark(payload: BookmarkRequest, request: Request) -> BookmarkEntry:
+        _, identity_id = identity_for(request)
         engine = engine_for(request)
         index = engine.id_to_index.get(payload.paper_id)
         if index is None:
             raise HTTPException(status_code=404, detail="Paper not found.")
         store = mongo_for(request)
-        _, identity_id = identity_for(request, session_id)
         try:
             saved = store.add_bookmark(identity_id, payload.paper_id)
         except MongoUnavailable as exc:
@@ -613,11 +621,10 @@ def create_app(
     def list_bookmarks(
         request: Request,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
-        session_id: SessionId = "local-anonymous",
     ) -> BookmarkList:
+        _, identity_id = identity_for(request)
         engine = engine_for(request)
         store = mongo_for(request)
-        _, identity_id = identity_for(request, session_id)
         try:
             saved = store.list_bookmarks(identity_id, limit)
         except MongoUnavailable as exc:
@@ -639,10 +646,9 @@ def create_app(
     def delete_bookmark(
         paper_id: Annotated[str, ApiPath(min_length=1, max_length=80)],
         request: Request,
-        session_id: SessionId = "local-anonymous",
     ) -> dict:
+        _, identity_id = identity_for(request)
         store = mongo_for(request)
-        _, identity_id = identity_for(request, session_id)
         try:
             deleted = store.remove_bookmark(identity_id, paper_id)
         except MongoUnavailable as exc:
@@ -653,10 +659,9 @@ def create_app(
     def list_search_history(
         request: Request,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
-        session_id: SessionId = "local-anonymous",
     ) -> SearchHistoryList:
+        _, identity_id = identity_for(request)
         store = mongo_for(request)
-        _, identity_id = identity_for(request, session_id)
         try:
             history = store.list_searches(identity_id, limit)
         except MongoUnavailable as exc:
@@ -664,9 +669,9 @@ def create_app(
         return SearchHistoryList(history=history)
 
     @application.get("/session/interests", response_model=InterestResponse)
-    def get_interests(request: Request, session_id: SessionId = "local-anonymous") -> InterestResponse:
+    def get_interests(request: Request) -> InterestResponse:
+        _, identity_id = identity_for(request)
         store = mongo_for(request)
-        _, identity_id = identity_for(request, session_id)
         try:
             saved = store.get_interests(identity_id)
         except MongoUnavailable as exc:
@@ -677,18 +682,11 @@ def create_app(
         )
 
     @application.put("/session/interests", response_model=InterestResponse)
-    def set_interests(
-        payload: InterestRequest, request: Request, session_id: SessionId = "local-anonymous"
-    ) -> InterestResponse:
+    def set_interests(payload: InterestRequest, request: Request) -> InterestResponse:
+        _, identity_id = identity_for(request)
         store = mongo_for(request)
-        _, identity_id = identity_for(request, session_id)
         try:
             saved = store.set_interests(identity_id, payload.terms)
-        except MongoUnavailable as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-        return InterestResponse(terms=saved["terms"], updated_at=saved["updated_at"])
-        try:
-            saved = store.set_interests(session_id, payload.terms)
         except MongoUnavailable as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return InterestResponse(terms=saved["terms"], updated_at=saved["updated_at"])

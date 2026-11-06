@@ -3,6 +3,12 @@ const SESSION_STORAGE_KEY = 'researchpaper-ai.local-session'
 const AUTH_TOKEN_KEY = 'researchpaper-ai.auth-token'
 const USER_KEY = 'researchpaper-ai.auth-user'
 let memorySessionId = null
+let memoryAuthToken = null
+let memoryAuthUser = null
+
+function isProtectedRequest(path) {
+  return !path.startsWith('/auth/') || path === '/auth/me' || path === '/auth/logout'
+}
 
 function createSessionId() {
   return globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -10,22 +16,27 @@ function createSessionId() {
 
 export function getStoredToken() {
   try {
-    return window.localStorage.getItem(AUTH_TOKEN_KEY) || null
+    const stored = window.localStorage.getItem(AUTH_TOKEN_KEY)
+    if (stored) memoryAuthToken = stored
+    return stored || memoryAuthToken
   } catch {
-    return null
+    return memoryAuthToken
   }
 }
 
 export function getStoredUser() {
   try {
     const raw = window.localStorage.getItem(USER_KEY)
-    return raw ? JSON.parse(raw) : null
+    if (raw) memoryAuthUser = JSON.parse(raw)
+    return memoryAuthUser
   } catch {
-    return null
+    return memoryAuthUser
   }
 }
 
 export function setAuth(token, user) {
+  memoryAuthToken = token || null
+  memoryAuthUser = user || null
   try {
     if (token) window.localStorage.setItem(AUTH_TOKEN_KEY, token)
     else window.localStorage.removeItem(AUTH_TOKEN_KEY)
@@ -37,6 +48,8 @@ export function setAuth(token, user) {
 }
 
 export function clearAuth() {
+  memoryAuthToken = null
+  memoryAuthUser = null
   try {
     window.localStorage.removeItem(AUTH_TOKEN_KEY)
     window.localStorage.removeItem(USER_KEY)
@@ -99,6 +112,12 @@ export async function apiRequest(path, options = {}) {
   }
   if (!response.ok) {
     const detail = typeof payload?.detail === 'string' ? payload.detail : `Request failed (${response.status}).`
+    if (response.status === 401 && token && isProtectedRequest(path)) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('researchpaper-auth-expired', { detail: { token } }))
+      }
+      clearAuth()
+    }
     throw new ApiError(detail, response.status)
   }
   return payload
@@ -166,4 +185,5 @@ export const api = {
     body: JSON.stringify({ email, otp, new_password: newPassword }),
   }),
   me: () => apiRequest('/auth/me'),
+  logout: () => apiRequest('/auth/logout', { method: 'POST' }),
 }

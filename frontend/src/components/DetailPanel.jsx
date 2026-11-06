@@ -35,15 +35,33 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
     }
   }, [paperId, paperRetry])
 
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    const originalOverflow = document.body.style.overflow
+    if (window.innerWidth <= 1000) {
+      document.body.style.overflow = 'hidden'
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = originalOverflow
+    }
+  }, [onClose])
+
   function copyBibtex() {
     if (!paper) return
     const firstWord = (paper.title.split(' ')[0] || 'paper').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
     const citeKey = `${firstWord}_arxiv`
-    const bibtex = `@article{${citeKey},
+    const bibtex = `@misc{${citeKey},
   title = {${paper.title.replace(/[{}]/g, '')}},
   abstract = {${(paper.abstract || '').replace(/[{}]/g, '')}},
   keywords = {${(paper.terms || []).join(', ')}},
-  year = {2021}
+  howpublished = {arXiv preprint},
+  note = {Indexed in arXiv CS/ML collection}
 }`
     navigator.clipboard?.writeText?.(bibtex)?.then(() => {
       setBibtexCopied(true)
@@ -69,10 +87,10 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
   return (
     <>
       <button className="detail-scrim" aria-label="Close paper details" onClick={onClose} />
-      <aside className="detail-panel" aria-label="Paper details">
+      <aside className="detail-panel" role="dialog" aria-modal="true" aria-label="Paper details">
         <div className="detail-panel-header">
           <span className="eyebrow">PAPER DETAILS</span>
-          <button className="icon-button close-button" onClick={onClose} aria-label="Close details"><Icon name="close" /></button>
+          <button className="icon-button close-button" onClick={onClose} aria-label="Close details (Esc)" title="Close details (Esc)"><Icon name="close" /></button>
         </div>
         {loadingPaper ? <div className="detail-loading"><span className="spinner" /> Loading paper details…</div> : error ? (
           <div className="inline-error" role="alert">{error}<button className="text-action" type="button" onClick={() => setPaperRetry((attempt) => attempt + 1)}>Retry loading paper</button></div>
@@ -106,7 +124,7 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
                 href={`https://arxiv.org/search/?query=${encodeURIComponent(paper.title)}&searchtype=title`}
                 target="_blank"
                 rel="noreferrer"
-                title="Search on arXiv"
+                title="Search on arXiv by title"
               >
                 arXiv Search ↗
               </a>
@@ -118,6 +136,9 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
               >
                 {bibtexCopied ? '✓ Copied BibTeX!' : 'Copy BibTeX'}
               </button>
+            </div>
+            <div className="metadata-disclaimer">
+              External links query arXiv and Google Scholar by title · Publication dates not recorded in corpus
             </div>
 
             <div className="detail-rule" />

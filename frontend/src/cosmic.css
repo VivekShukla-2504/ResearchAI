@@ -332,6 +332,92 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .bookmark-toast { right: 12px; bottom: 12px; width: calc(100vw - 24px); }
 }
 
+/* Compact search header on results screen */
+.compact-search-header {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px 16px;
+  margin-bottom: 22px;
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(14px);
+}
+.compact-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.compact-search-input-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.compact-search-input-wrap .search-form {
+  height: 46px;
+  box-shadow: none;
+}
+.compact-clear-btn {
+  height: 46px;
+  padding: 0 14px;
+}
+.compact-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Detail panel metadata disclaimer */
+.metadata-disclaimer {
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--surface-soft);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+/* DetailPanel responsive overlay on tablet and mobile */
+.detail-scrim {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .detail-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 13, 27, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 24;
+    border: 0;
+    cursor: pointer;
+  }
+  .detail-panel {
+    width: min(560px, 88vw);
+    box-shadow: -20px 0 60px rgba(0, 0, 0, 0.45);
+    z-index: 25;
+  }
+}
+@media (max-width: 700px) {
+  .detail-panel {
+    width: 100% !important;
+    left: 0;
+    right: 0;
+    top: auto !important;
+    bottom: 0;
+    height: min(88vh, 760px);
+    border-radius: 20px 20px 0 0;
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    padding: 20px 18px 36px;
+    box-shadow: 0 -16px 50px rgba(0, 0, 0, 0.45);
+    z-index: 26;
+  }
+}
+
 /* Search results header & meta */
 .results-meta-row {
   display: flex;

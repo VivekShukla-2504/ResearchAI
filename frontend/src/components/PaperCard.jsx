@@ -5,7 +5,7 @@ export function SimilarityScore({ value }) {
   return (
     <span
       className="similarity-score"
-      title={`Cosine similarity: ${value.toFixed(4)}. Reflects title & abstract textual overlap, not relevance probability.`}
+      title={`Cosine similarity: ${value.toFixed(4)}. Title/abstract text overlap score; does not guarantee relevance or paper quality.`}
     >
       <span className="match-badge">Text similarity: {value.toFixed(2)}</span>
       <span className="score-raw">{value.toFixed(3)}</span>
@@ -59,18 +59,18 @@ export default function PaperCard({ paper, onOpen, bookmarked, onBookmark, bookm
             href={`https://arxiv.org/search/?query=${encodeURIComponent(paper.title)}&searchtype=title`}
             target="_blank"
             rel="noreferrer"
-            title="Search paper on arXiv"
+            title="Search paper on arXiv by title"
           >
-            arXiv
+            arXiv Search ↗
           </a>
           <a
             className="scholar-link"
             href={`https://scholar.google.com/scholar?q=${encodeURIComponent(paper.title)}`}
             target="_blank"
             rel="noreferrer"
-            title="Search paper on Google Scholar"
+            title="Search paper on Google Scholar by title"
           >
-            Scholar
+            Google Scholar ↗
           </a>
           <button className="text-action" onClick={() => onOpen(paper.paper_id)} type="button">View details <Icon name="arrow" size={14} /></button>
         </div>

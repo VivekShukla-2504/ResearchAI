@@ -291,9 +291,10 @@ function App() {
     let content = `% BibTeX Citations exported from ResearchPaper AI\n\n`
     bookmarks.forEach((item) => {
       const firstWord = (item.title.split(' ')[0] || 'paper').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-      content += `@article{${firstWord}_arxiv,\n`
+      content += `@misc{${firstWord}_arxiv,\n`
       content += `  title = {${item.title.replace(/[{}]/g, '')}},\n`
-      content += `  year = {2021}\n}\n\n`
+      content += `  howpublished = {arXiv preprint},\n`
+      content += `  note = {Indexed in arXiv CS/ML collection}\n}\n\n`
     })
     downloadFile('citations.bib', content, 'text/plain;charset=utf-8')
     showBookmarkToast('success', 'Exported citations as BibTeX.')
@@ -439,21 +440,29 @@ function App() {
 
           {view === 'discover' && (
             <>
-              <section className={`hero ${hasSearched ? 'hero-compact' : ''}`}>
-                <div className="hero-orb hero-orb-one" /><div className="hero-orb hero-orb-two" />
-                <div className="hero-content">
-                  <div className="hero-eyebrow"><span className="eyebrow-star"><Icon name="spark" size={13} /></span> ACADEMIC RESEARCH PLATFORM · 41,120 PAPERS INDEXED</div>
-                  <h1>{hasSearched ? 'Explore the literature' : <>Explore the universe<br />of <em>research.</em></>}</h1>
-                  <p>Follow ideas across the literature. Search papers by topic, title, or research question. Results and recommendations are ranked using cosine text similarity on arXiv abstracts.</p>
-                  <SearchBar
-                    value={query}
-                    onChange={setQuery}
-                    onSubmit={(event) => { event.preventDefault(); runSearch() }}
-                    onSelectSuggestion={(selected) => { setQuery(selected); runSearch(selected) }}
-                    loading={searchLoading}
-                    disabled={backendAvailable === false}
-                  />
-                  <div className="category-filter-row" role="tablist" aria-label="Filter by research domain">
+              {hasSearched ? (
+                <div className="compact-search-header" aria-label="Search controls">
+                  <div className="compact-search-row">
+                    <div className="compact-search-input-wrap">
+                      <SearchBar
+                        value={query}
+                        onChange={setQuery}
+                        onSubmit={(event) => { event.preventDefault(); runSearch() }}
+                        onSelectSuggestion={(selected) => { setQuery(selected); runSearch(selected) }}
+                        loading={searchLoading}
+                        disabled={backendAvailable === false}
+                      />
+                    </div>
+                    <button
+                      className="secondary-action compact-clear-btn"
+                      type="button"
+                      onClick={() => { setHasSearched(false); setQuery(''); setSelectedCategory('') }}
+                      title="Clear search and return to Discover homepage"
+                    >
+                      <Icon name="close" size={13} /> Reset
+                    </button>
+                  </div>
+                  <div className="compact-filter-row" role="tablist" aria-label="Filter by research domain">
                     {CATEGORY_FILTERS.map((cat) => (
                       <button
                         key={cat.id}
@@ -465,10 +474,39 @@ function App() {
                       </button>
                     ))}
                   </div>
-                  <div className="search-hint"><span className="keycap">↵</span> Press Enter to search the paper collection</div>
                 </div>
-                <div className="hero-decoration" aria-hidden="true"><span className="orbit orbit-a" /><span className="orbit orbit-b" /><span className="orbit-center"><Icon name="book" size={28} /></span><i className="orbit-dot dot-a" /><i className="orbit-dot dot-b" /><i className="orbit-dot dot-c" /></div>
-              </section>
+              ) : (
+                <section className="hero">
+                  <div className="hero-orb hero-orb-one" /><div className="hero-orb hero-orb-two" />
+                  <div className="hero-content">
+                    <div className="hero-eyebrow"><span className="eyebrow-star"><Icon name="spark" size={13} /></span> ACADEMIC RESEARCH PLATFORM · 41,120 PAPERS INDEXED</div>
+                    <h1>Explore the universe<br />of <em>research.</em></h1>
+                    <p>Follow ideas across the literature. Search papers by topic, title, or research question. Results and recommendations are ranked using cosine text similarity on arXiv abstracts.</p>
+                    <SearchBar
+                      value={query}
+                      onChange={setQuery}
+                      onSubmit={(event) => { event.preventDefault(); runSearch() }}
+                      onSelectSuggestion={(selected) => { setQuery(selected); runSearch(selected) }}
+                      loading={searchLoading}
+                      disabled={backendAvailable === false}
+                    />
+                    <div className="category-filter-row" role="tablist" aria-label="Filter by research domain">
+                      {CATEGORY_FILTERS.map((cat) => (
+                        <button
+                          key={cat.id}
+                          className={`category-filter-pill ${selectedCategory === cat.id ? 'is-active' : ''}`}
+                          type="button"
+                          onClick={() => handleCategorySelect(cat.id)}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="search-hint"><span className="keycap">↵</span> Press Enter to search the paper collection</div>
+                  </div>
+                  <div className="hero-decoration" aria-hidden="true"><span className="orbit orbit-a" /><span className="orbit orbit-b" /><span className="orbit-center"><Icon name="book" size={28} /></span><i className="orbit-dot dot-a" /><i className="orbit-dot dot-b" /><i className="orbit-dot dot-c" /></div>
+                </section>
+              )}
 
               {hasSearched ? (
                 <section className="discovery-layout" aria-live="polite">

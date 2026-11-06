@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
 import Icon from './Icon.jsx'
 import { SimilarityScore } from './PaperCard.jsx'
+import SimilarityGraph from './SimilarityGraph.jsx'
 
 export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked, onBookmark, activityDisabled }) {
   const [paper, setPaper] = useState(null)
@@ -11,6 +12,7 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
   const [error, setError] = useState('')
   const [recommendationError, setRecommendationError] = useState('')
   const [bibtexCopied, setBibtexCopied] = useState(false)
+  const [recsViewMode, setRecsViewMode] = useState('list')
   const recommendationRequestId = useRef(0)
   const [paperRetry, setPaperRetry] = useState(0)
 
@@ -120,28 +122,81 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
               <section className="recommendations" aria-labelledby="recommendations-heading">
                 <div className="recommendation-heading">
                   <div><span className="eyebrow">RELATED RESEARCH</span><h3 id="recommendations-heading">Similar papers</h3></div>
-                  <span className="result-count">{recommendations.length}</span>
+                  <div className="recs-view-toggle">
+                    <button
+                      className={`toggle-btn ${recsViewMode === 'list' ? 'is-active' : ''}`}
+                      type="button"
+                      onClick={() => setRecsViewMode('list')}
+                      title="View as list"
+                    >
+                      List
+                    </button>
+                    <button
+                      className={`toggle-btn ${recsViewMode === 'graph' ? 'is-active' : ''}`}
+                      type="button"
+                      onClick={() => setRecsViewMode('graph')}
+                      title="Interactive Similarity Network Graph"
+                    >
+                      Graph 🕸️
+                    </button>
+                    <span className="result-count">{recommendations.length}</span>
+                  </div>
                 </div>
-                {recommendations.map((item) => (
-                  <article className="recommendation-item" key={item.paper_id}>
-                    <button className="recommendation-title" onClick={() => onOpenPaper(item.paper_id)}>{item.title}</button>
-                    <div className="tag-list recommendation-tags">{(item.terms || []).slice(0, 3).map((term) => <span className="category-tag" key={term}>{term}</span>)}</div>
-                    
-                    {item.matching_terms && item.matching_terms.length > 0 && (
-                      <div className="concept-overlap">
-                        <span className="concept-label"><Icon name="spark" size={12} /> Key overlap:</span>
-                        <div className="concept-tags">
-                          {item.matching_terms.slice(0, 3).map((term) => (
-                            <span className="concept-pill" key={term}>{term}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
 
-                    <SimilarityScore value={item.similarity} />
-                    <p>{item.abstract?.trim() || 'No abstract text is available for this record.'}</p>
-                  </article>
-                ))}
+                {recsViewMode === 'graph' ? (
+                  <SimilarityGraph
+                    seedPaper={paper}
+                    recommendations={recommendations}
+                    onOpenPaper={onOpenPaper}
+                  />
+                ) : (
+                  recommendations.map((item) => (
+                    <article className="recommendation-item" key={item.paper_id}>
+                      <button className="recommendation-title" onClick={() => onOpenPaper(item.paper_id)}>{item.title}</button>
+                      <div className="tag-list recommendation-tags">{(item.terms || []).slice(0, 3).map((term) => <span className="category-tag" key={term}>{term}</span>)}</div>
+                      
+                      {item.matching_terms && item.matching_terms.length > 0 && (
+                        <div className="concept-overlap">
+                          <span className="concept-label"><Icon name="spark" size={12} /> Key overlap:</span>
+                          <div className="concept-tags">
+                            {item.matching_terms.slice(0, 3).map((term) => (
+                              <span className="concept-pill" key={term}>{term}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <SimilarityScore value={item.similarity} />
+                      <p>{item.abstract?.trim() || 'No abstract text is available for this record.'}</p>
+
+                      <div className="recommendation-footer">
+                        <div className="recommendation-links">
+                          <a
+                            className="scholar-link"
+                            href={`https://scholar.google.com/scholar?q=${encodeURIComponent(item.title)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Search paper on Google Scholar"
+                          >
+                            Scholar ↗
+                          </a>
+                          <a
+                            className="scholar-link"
+                            href={`https://arxiv.org/search/?query=${encodeURIComponent(item.title)}&searchtype=title`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Search on arXiv"
+                          >
+                            arXiv ↗
+                          </a>
+                        </div>
+                        <button className="text-action" onClick={() => onOpenPaper(item.paper_id)} type="button">
+                          Explore paper <Icon name="arrow" size={13} />
+                        </button>
+                      </div>
+                    </article>
+                  ))
+                )}
               </section>
             )}
             {recommendations && recommendations.length === 0 && !loadingRecommendations && !recommendationError && (

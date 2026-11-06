@@ -39,6 +39,11 @@ class SearchResponse(BaseModel):
     history_saved: bool
 
 
+class SuggestResponse(BaseModel):
+    query: str
+    suggestions: list[str]
+
+
 class PaperDetails(PaperResult):
     source_rows: list[int]
 
@@ -202,6 +207,16 @@ def create_app(
             "paper_count": len(engine.papers),
             "mongodb": "available" if mongo_available else "unavailable",
         }
+
+    @application.get("/papers/suggest", response_model=SuggestResponse)
+    def suggest_queries(
+        request: Request,
+        q: Annotated[str, Query(min_length=1, max_length=100)],
+        limit: Annotated[int, Query(ge=1, le=10)] = 6,
+    ) -> SuggestResponse:
+        engine = engine_for(request)
+        suggestions = engine.suggest(prefix=q, limit=limit)
+        return SuggestResponse(query=q, suggestions=suggestions)
 
     @application.get("/papers/search", response_model=SearchResponse)
     def search_papers(

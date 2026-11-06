@@ -167,3 +167,12 @@ def test_recommendation_category_filtering():
     assert all("cs.LG" in item["terms"] for item in results)
 
 
+def test_suggest_returns_prefix_completions():
+    papers, _ = clean_records(tiny_papers())
+    engine = ResearchPaperRecommender(papers, min_df=1, max_features=1000)
+    suggestions = engine.suggest("graph", limit=5)
+    assert len(suggestions) > 0
+    assert all("graph" in s.lower() for s in suggestions)
+    assert engine.suggest("x", limit=5) == []
+
+

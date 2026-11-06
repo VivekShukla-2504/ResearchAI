@@ -61,6 +61,7 @@ export async function apiRequest(path, options = {}) {
 
 export const api = {
   health: () => apiRequest('/health'),
+  suggest: (query, limit = 6) => apiRequest(`/papers/suggest?q=${encodeURIComponent(query)}&limit=${limit}`),
   search: (query, limit = 10, category = '') => {
     let url = `/papers/search?q=${encodeURIComponent(query)}&limit=${limit}`
     if (category) url += `&category=${encodeURIComponent(category)}`

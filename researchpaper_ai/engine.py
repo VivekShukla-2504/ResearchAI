@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 from typing import Iterable
 
 import numpy as np
@@ -85,6 +86,34 @@ class ResearchPaperRecommender:
     def from_source(cls, path: str, **kwargs) -> "ResearchPaperRecommender":
         papers, _ = read_source(path)
         return cls(papers, **kwargs)
+
+    def suggest(self, prefix: str, limit: int = 6) -> list[str]:
+        clean = " ".join((prefix or "").split()).casefold()
+        if len(clean) < 2:
+            return []
+        feature_names = getattr(self, "_feature_names", None)
+        if feature_names is None:
+            feature_names = self.vectorizer.get_feature_names_out()
+            self._feature_names = feature_names
+
+        idx = bisect.bisect_left(feature_names, clean)
+        results: list[str] = []
+        while idx < len(feature_names) and len(results) < limit:
+            cand = str(feature_names[idx])
+            if cand.startswith(clean):
+                results.append(cand)
+                idx += 1
+            else:
+                break
+
+        if len(results) < limit:
+            for paper in self.papers:
+                t = paper.title
+                if t.casefold().startswith(clean) and t not in results:
+                    results.append(t)
+                    if len(results) >= limit:
+                        break
+        return results
 
     def recommend(
         self,

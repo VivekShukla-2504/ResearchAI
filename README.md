@@ -6,12 +6,12 @@ The project indexes arXiv paper titles and abstracts, lets readers search by top
 
 ## What it does
 
-- Search papers by title or research keywords with optional domain/category filtering (Computer Vision, Machine Learning, AI, NLP, Robotics).
-- Open a paper's title, abstract, and categories with direct external links to Google Scholar and arXiv.
-- Find similar papers with cosine similarity scores and **Explainable AI (XAI) feature attribution** highlighting the top overlapping n-gram concepts.
-- Copy ready-to-use BibTeX citations or export bookmarked papers as a complete Markdown / BibTeX Research Dossier.
-- Save papers, keep search history, and store research interests for the current browser session when MongoDB is available.
-- Continue searching and getting recommendations when MongoDB is offline; activity storage is then unavailable.
+- **Live Autocomplete & Query Suggestions:** Real-time prefix completion over 150,000 vocabulary n-grams and paper titles with keyboard navigation.
+- **Domain & Category Filtering:** Interactive topic filter pills across Computer Vision, Machine Learning, AI, NLP, Statistical ML, and Robotics.
+- **Explainable AI (XAI) Attribution:** Mathematical vector-space Hadamard attribution revealing key overlapping n-gram concepts on every recommended paper.
+- **Interactive Similarity Network Graph (Visual AI):** Orbital graph visualization connecting recommended papers to the seed paper with edge thickness proportional to cosine similarity.
+- **Academic Research Tools:** Direct Google Scholar & arXiv links on all search results and recommendations, one-click BibTeX copy, and bulk Research Dossier export (.md & .bib).
+- **Session-Based Activity Storage:** Bookmarks, search history, and research interests persisted via MongoDB with graceful offline fallback.
 
 The interface is a React/Vite application. The API is FastAPI, and scikit-learn handles text vectorization and ranking. MongoDB stores activity only; the paper collection is not copied into the database.
 

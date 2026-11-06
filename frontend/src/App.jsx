@@ -355,7 +355,14 @@ function App() {
                   <div className="hero-eyebrow"><span className="eyebrow-star"><Icon name="spark" size={13} /></span> RESEARCH, CONNECTED</div>
                   <h1>{hasSearched ? 'Explore the literature' : <>Explore the universe<br />of <em>research.</em></>}</h1>
                   <p>Follow ideas across the literature. Search papers by topic, title, or the question you are trying to answer.</p>
-                  <SearchBar value={query} onChange={setQuery} onSubmit={(event) => { event.preventDefault(); runSearch() }} loading={searchLoading} disabled={backendAvailable === false} />
+                  <SearchBar
+                    value={query}
+                    onChange={setQuery}
+                    onSubmit={(event) => { event.preventDefault(); runSearch() }}
+                    onSelectSuggestion={(selected) => { setQuery(selected); runSearch(selected) }}
+                    loading={searchLoading}
+                    disabled={backendAvailable === false}
+                  />
                   <div className="category-filter-row" role="tablist" aria-label="Filter by research domain">
                     {CATEGORY_FILTERS.map((cat) => (
                       <button

@@ -452,10 +452,6 @@ def create_app(
         new_hash = hash_password(payload.new_password)
         store.update_user(user["user_id"], {"password_hash": new_hash})
         return {"message": "Password reset successfully. You can now log in with your new password."}
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MongoDB is unavailable; activity storage is disabled.",
-            )
-        return store
 
     @application.get("/health")
     def health(request: Request) -> dict:

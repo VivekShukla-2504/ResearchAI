@@ -83,11 +83,12 @@ def _labels(papers, query_indices: np.ndarray) -> tuple[dict[str, np.ndarray], d
     return inverse, relevant
 
 
-def _metrics(rankings: list[list[int]], indices: np.ndarray, relevant: list[set[int]],
-             catalog_size: int, baseline_matrix) -> dict:
+def _metrics(rankings: list[list[int]], indices: np.ndarray, relevant: dict[int, np.ndarray],
+             catalog_size: int, baseline_matrix, k: int = 10) -> dict:
     p5, p10, r5, r10, ndcg10, mrr, diversity = [], [], [], [], [], [], []
     used: set[int] = set()
-    for source, ranking in zip(indices, rankings):
+    for source, raw_ranking in zip(indices, rankings):
+        ranking = list(raw_ranking)[:k]
         truth = relevant[int(source)]
         rel = truth[np.asarray(ranking, dtype=np.int32)].astype(np.float32, copy=False)
         rel_total = max(int(truth.sum()), 1)

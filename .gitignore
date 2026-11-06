@@ -23,3 +23,7 @@ frontend/.env.*
 *.key
 *.p12
 *.pfx
+
+# Local presentation and viva notes
+FINAL_PRESENTATION_6_SLIDES.md
+VIVA_PREPARATION_GUIDE.md

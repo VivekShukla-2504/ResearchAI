@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from './lib/api.js'
+import AuthModal from './components/AuthModal.jsx'
 import DetailPanel from './components/DetailPanel.jsx'
 import EmptyState from './components/EmptyState.jsx'
 import Icon from './components/Icon.jsx'
@@ -87,6 +88,9 @@ function App() {
   const [bookmarkToast, setBookmarkToast] = useState(null)
   const [personalizedPapers, setPersonalizedPapers] = useState([])
   const [personalizedLoading, setPersonalizedLoading] = useState(false)
+  const [currentUser, setCurrentUser] = useState(() => api.getStoredUser())
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [authModalMode, setAuthModalMode] = useState('login')
 
   const bookmarkIds = useMemo(() => new Set(bookmarks.map((item) => item.paper_id)), [bookmarks])
 
@@ -128,6 +132,15 @@ function App() {
       setBackendAvailable(true)
       const available = response.mongodb === 'available'
       setActivityAvailable(available)
+      if (api.getStoredToken()) {
+        try {
+          const me = await api.me()
+          setCurrentUser(me)
+        } catch {
+          api.clearAuth()
+          setCurrentUser(null)
+        }
+      }
       if (available) await loadActivity()
     } catch (error) {
       setBackendAvailable(false)
@@ -135,6 +148,19 @@ function App() {
       setActivityAvailable(false)
       setNotice(error.message)
     }
+  }
+
+  function handleAuthSuccess(user, message) {
+    setCurrentUser(user)
+    showBookmarkToast('success', message)
+    loadActivity()
+  }
+
+  function handleLogout() {
+    api.clearAuth()
+    setCurrentUser(null)
+    showBookmarkToast('success', 'Signed out successfully.')
+    loadActivity()
   }
 
   async function loadActivity() {
@@ -342,6 +368,29 @@ function App() {
         <header className="topbar">
           <div className="breadcrumbs"><span>Workspace</span><Icon name="chevron" size={14} /><strong>{pageTitle}</strong></div>
           <div className="topbar-actions">
+            {currentUser ? (
+              <div className="user-profile-badge">
+                <div className="user-avatar-circle" title={currentUser.email}>
+                  {currentUser.picture ? (
+                    <img src={currentUser.picture} alt={currentUser.name} />
+                  ) : (
+                    (currentUser.name || currentUser.email)[0].toUpperCase()
+                  )}
+                </div>
+                <span className="user-display-name">{currentUser.name || currentUser.email}</span>
+                <button className="sign-out-btn" type="button" onClick={handleLogout} title="Sign Out">
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button
+                className="auth-open-btn"
+                type="button"
+                onClick={() => { setAuthModalMode('login'); setAuthModalOpen(true); }}
+              >
+                <Icon name="spark" size={14} /> Sign In
+              </button>
+            )}
             <button
               className="theme-toggle"
               type="button"
@@ -544,6 +593,13 @@ function App() {
       </div>
 
       {selectedPaperId && view !== 'discover' && <DetailPanel paperId={selectedPaperId} onClose={() => setSelectedPaperId(null)} onOpenPaper={openPaper} bookmarked={bookmarkIds.has(selectedPaperId)} onBookmark={toggleBookmark} activityDisabled={!activityAvailable} />}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+        initialMode={authModalMode}
+        theme={theme}
+      />
       {bookmarkToast && <div className={`bookmark-toast bookmark-toast-${bookmarkToast.type}`} role={bookmarkToast.type === 'error' ? 'alert' : 'status'} aria-live={bookmarkToast.type === 'error' ? 'assertive' : 'polite'} aria-atomic="true">
         <span className="bookmark-toast-icon"><Icon name={bookmarkToast.type === 'success' ? 'check' : 'close'} size={17} /></span>
         <span className="bookmark-toast-message">{bookmarkToast.message}</span>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 from datetime import datetime, timezone
 from typing import Any
 
@@ -50,6 +51,10 @@ class MongoStore:
                 [("session_id", ASCENDING), ("created_at", DESCENDING)]
             )
             self.database.interests.create_index("session_id", unique=True)
+            self.database.users.create_index("email", unique=True)
+            self.database.users.create_index("user_id", unique=True)
+            self.database.otps.create_index([("email", ASCENDING), ("purpose", ASCENDING)])
+            self.database.otps.create_index("expires_at", expireAfterSeconds=0)
             self.available = True
         except PyMongoError as exc:
             logger.warning("MongoDB unavailable; activity persistence disabled (%s)", type(exc).__name__)
@@ -148,3 +153,81 @@ class MongoStore:
             "terms": terms,
             "updated_at": now,
         }
+
+    def get_user_by_email(self, email: str) -> dict[str, Any] | None:
+        clean = email.strip().lower()
+        return self._run(lambda: self._collection("users").find_one({"email": clean}, {"_id": 0}))
+
+    def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
+        return self._run(lambda: self._collection("users").find_one({"user_id": user_id}, {"_id": 0}))
+
+    def create_user(
+        self,
+        *,
+        email: str,
+        name: str,
+        password_hash: str | None = None,
+        auth_provider: str = "local",
+        is_verified: bool = False,
+        picture: str | None = None,
+    ) -> dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        user_id = f"user_{secrets.token_hex(12)}"
+        user_doc = {
+            "user_id": user_id,
+            "email": email.strip().lower(),
+            "name": name.strip(),
+            "password_hash": password_hash,
+            "auth_provider": auth_provider,
+            "is_verified": is_verified,
+            "picture": picture,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._run(lambda: self._collection("users").insert_one(user_doc))
+        clean_user = dict(user_doc)
+        clean_user.pop("password_hash", None)
+        clean_user.pop("_id", None)
+        return clean_user
+
+    def update_user(self, user_id: str, fields: dict[str, Any]) -> bool:
+        update_doc = dict(fields)
+        update_doc["updated_at"] = datetime.now(timezone.utc)
+        result = self._run(
+            lambda: self._collection("users").update_one(
+                {"user_id": user_id},
+                {"$set": update_doc},
+            )
+        )
+        return result.modified_count > 0
+
+    def save_otp(self, email: str, otp: str, purpose: str, ttl_minutes: int = 10) -> None:
+        clean = email.strip().lower()
+        now = datetime.now(timezone.utc)
+        expires_at = datetime.fromtimestamp(now.timestamp() + ttl_minutes * 60, timezone.utc)
+        self._run(
+            lambda: self._collection("otps").update_one(
+                {"email": clean, "purpose": purpose},
+                {"$set": {"otp": otp, "expires_at": expires_at, "created_at": now}},
+                upsert=True,
+            )
+        )
+
+    def verify_and_consume_otp(self, email: str, otp: str, purpose: str) -> bool:
+        clean = email.strip().lower()
+        now = datetime.now(timezone.utc)
+        record = self._run(
+            lambda: self._collection("otps").find_one({"email": clean, "purpose": purpose})
+        )
+        if not record:
+            return False
+        exp = record.get("expires_at")
+        if exp:
+            exp_utc = exp.replace(tzinfo=timezone.utc if exp.tzinfo is None else exp.tzinfo)
+            if exp_utc < now:
+                self._run(lambda: self._collection("otps").delete_one({"_id": record["_id"]}))
+                return False
+        if str(record.get("otp")).strip() != otp.strip():
+            return False
+        self._run(lambda: self._collection("otps").delete_one({"_id": record["_id"]}))
+        return True

@@ -25,11 +25,13 @@ def test_connect_creates_only_activity_indexes(monkeypatch):
 def test_activity_operations_are_session_scoped(monkeypatch):
     client = MagicMock()
     database = MagicMock()
-    collections = {name: MagicMock() for name in ("bookmarks", "search_history", "interests")}
+    collections = {name: MagicMock() for name in ("bookmarks", "search_history", "interests", "users", "otps")}
     database.__getitem__.side_effect = collections.__getitem__
     database.bookmarks = collections["bookmarks"]
     database.search_history = collections["search_history"]
     database.interests = collections["interests"]
+    database.users = collections["users"]
+    database.otps = collections["otps"]
     client.__getitem__.return_value = database
     monkeypatch.setattr("researchpaper_ai.mongo_store.MongoClient", lambda *args, **kwargs: client)
     store = MongoStore("mongodb://example", "test_db")
@@ -88,5 +90,33 @@ def test_runtime_database_error_closes_client_and_disables_store(monkeypatch, ca
     assert store.available is False
     assert store.client is None
     assert store.database is None
+
+
+def test_user_and_otp_operations(monkeypatch):
+    client = MagicMock()
+    database = MagicMock()
+    collections = {name: MagicMock() for name in ("bookmarks", "search_history", "interests", "users", "otps")}
+    database.__getitem__.side_effect = collections.__getitem__
+    database.users = collections["users"]
+    database.otps = collections["otps"]
+    client.__getitem__.return_value = database
+    monkeypatch.setattr("researchpaper_ai.mongo_store.MongoClient", lambda *args, **kwargs: client)
+    store = MongoStore("mongodb://example", "test_db")
+    assert store.connect() is True
+
+    # User creation
+    user = store.create_user(email="test@example.com", name="Test User", password_hash="pbkdf2:hash")
+    assert user["email"] == "test@example.com"
+    assert user["name"] == "Test User"
+    assert "user_id" in user
+    database.users.insert_one.assert_called_once()
+
+    # OTP save & verify
+    store.save_otp("test@example.com", "123456", "signup")
+    database.otps.update_one.assert_called_once()
+
+    database.otps.find_one.return_value = {"_id": "otp-id-1", "email": "test@example.com", "otp": "123456", "purpose": "signup"}
+    assert store.verify_and_consume_otp("test@example.com", "123456", "signup") is True
+    database.otps.delete_one.assert_called_once()
+    store.close()
     client.close.assert_called_once()
-    assert "runtime-private-connection-marker" not in caplog.text

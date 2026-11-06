@@ -492,7 +492,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="No user found with this email.")
         return {"message": "Password reset successfully. You can now log in with your new password."}
 
-    @application.get("/")
+    @application.api_route("/", methods=["GET", "HEAD"])
     def root() -> dict:
         return {
             "name": "ResearchPaper AI API",
@@ -502,7 +502,7 @@ def create_app(
             "docs": "/docs",
         }
 
-    @application.get("/health")
+    @application.api_route("/health", methods=["GET", "HEAD"])
     def health(request: Request) -> dict:
         engine = engine_for(request)
         mongo_available = bool(request.app.state.mongo.available)

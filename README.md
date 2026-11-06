@@ -116,6 +116,18 @@ python -m pip install -r requirements.txt
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
+Before starting the API, set `JWT_SECRET` in `.env` (or your deployment's
+secret manager) to a unique random value of at least 32 characters. Generate
+one with:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Do not commit or share the generated value. The API refuses to start when the
+secret is missing, too short, or a known placeholder. Password resets
+invalidate all previously issued JWTs for that account.
+
 The API expects the fitted artifact at `artifacts/recommender.joblib` by default. If it is not present, build it once after preprocessing:
 
 ```powershell

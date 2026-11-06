@@ -31,6 +31,30 @@ from .auth import (
 load_dotenv()
 logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+JWT_SECRET_MIN_LENGTH = 32
+JWT_SECRET_PLACEHOLDERS = (
+    "your_secret_key_here",
+    "change_me",
+    "change-me",
+    "changeme",
+    "replace_me",
+    "replace-me",
+    "placeholder",
+)
+
+
+def _configured_jwt_secret() -> str:
+    secret = os.getenv("JWT_SECRET")
+    if (
+        not secret
+        or len(secret) < JWT_SECRET_MIN_LENGTH
+        or secret != secret.strip()
+        or any(placeholder in secret.casefold() for placeholder in JWT_SECRET_PLACEHOLDERS)
+    ):
+        raise RuntimeError(
+            "JWT_SECRET must be configured with a unique random value of at least 32 characters."
+        )
+    return secret
 
 
 class PaperResult(BaseModel):
@@ -236,13 +260,16 @@ def create_app(
     artifact_path: str | Path | None = None,
     mongo_store_factory: Callable[[], MongoStore] | None = None,
     cors_origins: list[str] | None = None,
+    jwt_secret: str | None = None,
 ) -> FastAPI:
+    configured_jwt_secret = jwt_secret if jwt_secret is not None else _configured_jwt_secret()
     artifact = _resolve_path(
         artifact_path or os.getenv("MODEL_ARTIFACT_PATH", "artifacts/recommender.joblib")
     )
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
+        application.state.jwt_secret = configured_jwt_secret
         application.state.engine = model or load_model_artifact(artifact)
         store_factory = mongo_store_factory or MongoStore.from_environment
         store = None
@@ -302,11 +329,37 @@ def create_app(
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:].strip()
-            secret = os.getenv("JWT_SECRET", "410d4c5cd89ec92e2169894a1af55e33e32d262fafe718274a3be497f52ca9cc")
-            payload = decode_jwt(token, secret)
+            payload = decode_jwt(token, request.app.state.jwt_secret)
             if payload and "user_id" in payload:
-                return payload, str(payload["user_id"])
+                store = request.app.state.mongo
+                if store.available:
+                    try:
+                        user = store.get_user_by_id(str(payload["user_id"]))
+                    except MongoUnavailable:
+                        user = None
+                    if user:
+                        try:
+                            token_version = int(payload.get("token_version", 0) or 0)
+                            current_version = int(user.get("token_version", 0) or 0)
+                        except (TypeError, ValueError):
+                            user = None
+                        else:
+                            if token_version == current_version:
+                                return payload, str(payload["user_id"])
         return None, session_id or "local-anonymous"
+
+    def issue_token(request: Request, user: dict) -> str:
+        days = int(os.getenv("JWT_EXPIRES_DAYS", "7"))
+        return create_jwt(
+            {
+                "user_id": user["user_id"],
+                "email": user["email"],
+                "name": user["name"],
+                "token_version": user.get("token_version", 0),
+            },
+            request.app.state.jwt_secret,
+            expires_in_seconds=days * 86400,
+        )
 
     @application.post("/auth/send-otp")
     def send_otp(payload: SendOtpRequest, request: Request) -> dict:
@@ -339,13 +392,7 @@ def create_app(
             auth_provider="local",
             is_verified=True,
         )
-        secret = os.getenv("JWT_SECRET", "410d4c5cd89ec92e2169894a1af55e33e32d262fafe718274a3be497f52ca9cc")
-        days = int(os.getenv("JWT_EXPIRES_DAYS", "7"))
-        token = create_jwt(
-            {"user_id": user["user_id"], "email": user["email"], "name": user["name"]},
-            secret,
-            expires_in_seconds=days * 86400,
-        )
+        token = issue_token(request, user)
         return AuthResponse(token=token, user=UserProfile(**user), message="Account created successfully.")
 
     @application.post("/auth/login", response_model=AuthResponse)
@@ -354,13 +401,7 @@ def create_app(
         user = store.get_user_by_email(payload.email)
         if not user or not verify_password(payload.password, user.get("password_hash")):
             raise HTTPException(status_code=401, detail="Invalid email or password.")
-        secret = os.getenv("JWT_SECRET", "410d4c5cd89ec92e2169894a1af55e33e32d262fafe718274a3be497f52ca9cc")
-        days = int(os.getenv("JWT_EXPIRES_DAYS", "7"))
-        token = create_jwt(
-            {"user_id": user["user_id"], "email": user["email"], "name": user["name"]},
-            secret,
-            expires_in_seconds=days * 86400,
-        )
+        token = issue_token(request, user)
         clean_user = dict(user)
         clean_user.pop("password_hash", None)
         return AuthResponse(token=token, user=UserProfile(**clean_user), message="Welcome back!")
@@ -380,13 +421,7 @@ def create_app(
                 auth_provider="local",
                 is_verified=True,
             )
-        secret = os.getenv("JWT_SECRET", "410d4c5cd89ec92e2169894a1af55e33e32d262fafe718274a3be497f52ca9cc")
-        days = int(os.getenv("JWT_EXPIRES_DAYS", "7"))
-        token = create_jwt(
-            {"user_id": user["user_id"], "email": user["email"], "name": user["name"]},
-            secret,
-            expires_in_seconds=days * 86400,
-        )
+        token = issue_token(request, user)
         clean_user = dict(user)
         clean_user.pop("password_hash", None)
         return AuthResponse(token=token, user=UserProfile(**clean_user), message="Logged in with OTP.")
@@ -411,13 +446,7 @@ def create_app(
             if info.get("picture") and not user.get("picture"):
                 store.update_user(user["user_id"], {"picture": info["picture"]})
                 user["picture"] = info["picture"]
-        secret = os.getenv("JWT_SECRET", "410d4c5cd89ec92e2169894a1af55e33e32d262fafe718274a3be497f52ca9cc")
-        days = int(os.getenv("JWT_EXPIRES_DAYS", "7"))
-        token = create_jwt(
-            {"user_id": user["user_id"], "email": user["email"], "name": user["name"]},
-            secret,
-            expires_in_seconds=days * 86400,
-        )
+        token = issue_token(request, user)
         clean_user = dict(user)
         clean_user.pop("password_hash", None)
         return AuthResponse(token=token, user=UserProfile(**clean_user), message="Logged in with Google.")
@@ -450,7 +479,8 @@ def create_app(
         if not user:
             raise HTTPException(status_code=404, detail="No user found with this email.")
         new_hash = hash_password(payload.new_password)
-        store.update_user(user["user_id"], {"password_hash": new_hash})
+        if not store.update_password_and_revoke_tokens(user["user_id"], new_hash):
+            raise HTTPException(status_code=404, detail="No user found with this email.")
         return {"message": "Password reset successfully. You can now log in with your new password."}
 
     @application.get("/health")

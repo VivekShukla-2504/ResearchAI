@@ -178,6 +178,7 @@ class MongoStore:
             "email": email.strip().lower(),
             "name": name.strip(),
             "password_hash": password_hash,
+            "token_version": 0,
             "auth_provider": auth_provider,
             "is_verified": is_verified,
             "picture": picture,
@@ -197,6 +198,21 @@ class MongoStore:
             lambda: self._collection("users").update_one(
                 {"user_id": user_id},
                 {"$set": update_doc},
+            )
+        )
+        return result.modified_count > 0
+
+    def update_password_and_revoke_tokens(self, user_id: str, password_hash: str) -> bool:
+        result = self._run(
+            lambda: self._collection("users").update_one(
+                {"user_id": user_id},
+                {
+                    "$set": {
+                        "password_hash": password_hash,
+                        "updated_at": datetime.now(timezone.utc),
+                    },
+                    "$inc": {"token_version": 1},
+                },
             )
         )
         return result.modified_count > 0

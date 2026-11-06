@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 import joblib
+import pytest
 from fastapi.testclient import TestClient
 
 from researchpaper_ai.api import create_app
@@ -15,6 +16,8 @@ class MemoryActivityStore:
         self.bookmarks = {}
         self.searches = []
         self.interests = {}
+        self.users = {}
+        self.otps = {}
 
     def connect(self):
         return self.available
@@ -58,6 +61,54 @@ class MemoryActivityStore:
         self.interests[session_id] = item
         return item
 
+    def create_user(
+        self, *, email, name, password_hash=None, auth_provider="local",
+        is_verified=False, picture=None,
+    ):
+        user_id = f"user_{len(self.users) + 1}"
+        user = {
+            "user_id": user_id,
+            "email": email.strip().lower(),
+            "name": name.strip(),
+            "password_hash": password_hash,
+            "token_version": 0,
+            "auth_provider": auth_provider,
+            "is_verified": is_verified,
+            "picture": picture,
+            "created_at": datetime.now(timezone.utc),
+        }
+        self.users[user_id] = user
+        return {key: value for key, value in user.items() if key != "password_hash"}
+
+    def get_user_by_email(self, email):
+        clean_email = email.strip().lower()
+        return next((user for user in self.users.values() if user["email"] == clean_email), None)
+
+    def get_user_by_id(self, user_id):
+        return self.users.get(user_id)
+
+    def update_user(self, user_id, fields):
+        user = self.users.get(user_id)
+        if not user:
+            return False
+        user.update(fields)
+        return True
+
+    def update_password_and_revoke_tokens(self, user_id, password_hash):
+        user = self.users.get(user_id)
+        if not user:
+            return False
+        user["password_hash"] = password_hash
+        user["token_version"] = user.get("token_version", 0) + 1
+        return True
+
+    def verify_and_consume_otp(self, email, otp, purpose):
+        key = (email.strip().lower(), purpose)
+        if self.otps.get(key) != otp:
+            return False
+        del self.otps[key]
+        return True
+
 
 def build_engine():
     rows = [
@@ -79,6 +130,71 @@ def client_for(engine=None, store=None, artifact_path=None):
         cors_origins=["http://localhost:5173"],
     )
     return TestClient(app), repository
+
+
+@pytest.fixture(autouse=True)
+def set_test_jwt_secret(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "test-only-random-secret-for-api-tests-2026")
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [None, "short", "your_secret_key_here_" + "x" * 40],
+)
+def test_startup_rejects_missing_weak_or_placeholder_jwt_secret(secret, monkeypatch):
+    if secret is None:
+        monkeypatch.delenv("JWT_SECRET", raising=False)
+    else:
+        monkeypatch.setenv("JWT_SECRET", secret)
+    with pytest.raises(RuntimeError, match="JWT_SECRET") as error:
+        create_app(model=build_engine(), mongo_store_factory=MemoryActivityStore)
+    assert secret is None or secret not in str(error.value)
+
+
+def test_password_reset_revokes_existing_tokens_and_new_login_works():
+    client, store = client_for(engine=build_engine())
+    store.otps[("researcher@example.edu", "signup")] = "111111"
+    with client:
+        signup = client.post(
+            "/auth/signup",
+            json={
+                "name": "Researcher",
+                "email": "researcher@example.edu",
+                "password": "old-password",
+                "otp": "111111",
+            },
+        )
+        assert signup.status_code == 200
+        original_token = signup.json()["token"]
+        original_user = signup.json()["user"]
+        assert set(signup.json()) == {"token", "user", "message"}
+        assert client.get(
+            "/auth/me", headers={"Authorization": f"Bearer {original_token}"}
+        ).status_code == 200
+
+        store.otps[("researcher@example.edu", "reset_password")] = "222222"
+        reset = client.post(
+            "/auth/reset-password",
+            json={
+                "email": "researcher@example.edu",
+                "otp": "222222",
+                "new_password": "new-password",
+            },
+        )
+        assert reset.status_code == 200
+        assert client.get(
+            "/auth/me", headers={"Authorization": f"Bearer {original_token}"}
+        ).status_code == 401
+
+        login = client.post(
+            "/auth/login",
+            json={"email": "researcher@example.edu", "password": "new-password"},
+        )
+        assert login.status_code == 200
+        assert login.json()["user"]["user_id"] == original_user["user_id"]
+        assert client.get(
+            "/auth/me", headers={"Authorization": f"Bearer {login.json()['token']}"}
+        ).status_code == 200
 
 
 def test_search_details_and_recommendations():
@@ -249,4 +365,3 @@ def test_personalized_recommendations():
         alias = client.get("/session/recommendations")
         assert alias.status_code == 200
         assert len(alias.json()["recommendations"]) > 0
-

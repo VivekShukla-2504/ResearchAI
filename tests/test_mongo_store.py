@@ -109,7 +109,14 @@ def test_user_and_otp_operations(monkeypatch):
     assert user["email"] == "test@example.com"
     assert user["name"] == "Test User"
     assert "user_id" in user
+    assert user["token_version"] == 0
     database.users.insert_one.assert_called_once()
+
+    database.users.update_one.return_value.modified_count = 1
+    assert store.update_password_and_revoke_tokens("user-1", "new-password-hash") is True
+    update = database.users.update_one.call_args.args[1]
+    assert update["$set"]["password_hash"] == "new-password-hash"
+    assert update["$inc"] == {"token_version": 1}
 
     # OTP save & verify
     store.save_otp("test@example.com", "123456", "signup")

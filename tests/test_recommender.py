@@ -176,3 +176,31 @@ def test_suggest_returns_prefix_completions():
     assert engine.suggest("x", limit=5) == []
 
 
+def test_recommend_for_profile_with_bookmarks():
+    papers, _ = clean_records(tiny_papers())
+    engine = ResearchPaperRecommender(papers, min_df=1, max_features=1000)
+    source = next(paper for paper in papers if paper.title == "Graph learning")
+    results = engine.recommend_for_profile(paper_ids=[source.paper_id], top_k=2)
+    assert len(results) > 0
+    assert source.paper_id not in {r["paper_id"] for r in results}
+    assert "matching_terms" in results[0]
+    assert isinstance(results[0]["matching_terms"], list)
+
+
+def test_recommend_for_profile_with_interests():
+    papers, _ = clean_records(tiny_papers())
+    engine = ResearchPaperRecommender(papers, min_df=1, max_features=1000)
+    results = engine.recommend_for_profile(interest_terms=["attention", "nodes"], top_k=2)
+    assert len(results) > 0
+    assert any("attention" in r["title"].lower() or "attention" in r["abstract"].lower() for r in results)
+
+
+def test_recommend_for_profile_empty_returns_empty():
+    papers, _ = clean_records(tiny_papers())
+    engine = ResearchPaperRecommender(papers, min_df=1, max_features=1000)
+    assert engine.recommend_for_profile(paper_ids=[], interest_terms=[]) == []
+    assert engine.recommend_for_profile(paper_ids=None, interest_terms=None) == []
+    assert engine.recommend_for_profile(paper_ids=["non-existent-id"]) == []
+
+
+

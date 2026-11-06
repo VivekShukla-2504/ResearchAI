@@ -53,6 +53,11 @@ class RecommendationResponse(BaseModel):
     recommendations: list[PaperResult]
 
 
+class PersonalizedResponse(BaseModel):
+    recommendations: list[PaperResult]
+    based_on: dict[str, int]
+
+
 class BookmarkRequest(BaseModel):
     paper_id: str = Field(min_length=1, max_length=80)
 
@@ -264,6 +269,42 @@ def create_app(
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Paper not found.") from exc
         return RecommendationResponse(paper_id=paper_id, recommendations=recommendations)
+
+    @application.get("/session/recommendations", response_model=PersonalizedResponse)
+    @application.get("/papers/recommendations/personalized", response_model=PersonalizedResponse)
+    def get_personalized_recommendations(
+        request: Request,
+        category: Annotated[str | None, Query(max_length=64)] = None,
+        k: Annotated[int, Query(ge=1, le=50)] = 10,
+        session_id: SessionId = "local-anonymous",
+    ) -> PersonalizedResponse:
+        engine = engine_for(request)
+        store = request.app.state.mongo
+        bookmarked_ids: list[str] = []
+        interest_terms: list[str] = []
+        if store.available:
+            try:
+                bookmarks = store.list_bookmarks(session_id, limit=50)
+                bookmarked_ids = [b["paper_id"] for b in bookmarks]
+                interests = store.get_interests(session_id)
+                if interests and "terms" in interests:
+                    interest_terms = interests["terms"]
+            except MongoUnavailable:
+                logger.warning("MongoDB unavailable for personalized recommendations")
+
+        results = engine.recommend_for_profile(
+            paper_ids=bookmarked_ids,
+            interest_terms=interest_terms,
+            category=category,
+            top_k=k,
+        )
+        return PersonalizedResponse(
+            recommendations=results,
+            based_on={
+                "bookmarks_count": len(bookmarked_ids),
+                "interests_count": len(interest_terms),
+            },
+        )
 
     @application.post("/session/bookmarks", response_model=BookmarkEntry, status_code=201)
     def add_bookmark(

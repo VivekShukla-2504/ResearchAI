@@ -73,6 +73,11 @@ export const api = {
     if (category) url += `&category=${encodeURIComponent(category)}`
     return apiRequest(url)
   },
+  personalizedRecommendations: (k = 10, category = '') => {
+    let url = `/papers/recommendations/personalized?k=${k}`
+    if (category) url += `&category=${encodeURIComponent(category)}`
+    return apiRequest(url)
+  },
   bookmarks: () => apiRequest('/session/bookmarks?limit=100'),
   addBookmark: (paperId) => apiRequest('/session/bookmarks', {
     method: 'POST',

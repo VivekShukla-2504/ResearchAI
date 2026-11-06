@@ -85,6 +85,8 @@ function App() {
   const nextToastId = useRef(0)
   const [pendingBookmarkIds, setPendingBookmarkIds] = useState(() => new Set())
   const [bookmarkToast, setBookmarkToast] = useState(null)
+  const [personalizedPapers, setPersonalizedPapers] = useState([])
+  const [personalizedLoading, setPersonalizedLoading] = useState(false)
 
   const bookmarkIds = useMemo(() => new Set(bookmarks.map((item) => item.paper_id)), [bookmarks])
 
@@ -157,6 +159,21 @@ function App() {
     const savedInterests = interestResult.value.terms || []
     setInterests(savedInterests)
     setInterestDraft(savedInterests.join('\n'))
+    if ((bookmarkResult.value.bookmarks?.length || 0) > 0 || savedInterests.length > 0) {
+      loadPersonalized()
+    }
+  }
+
+  async function loadPersonalized(cat = selectedCategory) {
+    setPersonalizedLoading(true)
+    try {
+      const response = await api.personalizedRecommendations(6, cat)
+      setPersonalizedPapers(response.recommendations || [])
+    } catch {
+      setPersonalizedPapers([])
+    } finally {
+      setPersonalizedLoading(false)
+    }
   }
 
   useEffect(() => { checkBackend() }, [])
@@ -201,6 +218,8 @@ function App() {
     setSelectedCategory(catId)
     if (query.trim()) {
       runSearch(query, catId)
+    } else {
+      loadPersonalized(catId)
     }
   }
 
@@ -264,9 +283,11 @@ function App() {
       } else if (outcome.action === 'remove') {
         setBookmarks((current) => current.filter((entry) => entry.paper_id !== paperId))
         showBookmarkToast('success', outcome.message)
+        loadPersonalized()
       } else {
         setBookmarks((current) => [outcome.bookmark, ...current.filter((entry) => entry.paper_id !== paperId)])
         showBookmarkToast('success', outcome.message)
+        loadPersonalized()
       }
     } finally {
       bookmarkRequestIds.current.delete(paperId)
@@ -290,6 +311,7 @@ function App() {
       setInterestDraft((response.terms || []).join('\n'))
       setActivityError('')
       setNotice('Research interests saved for this local session.')
+      loadPersonalized()
     } catch (error) {
       if (error instanceof ApiError && error.status === 503) setActivityAvailable(false)
       setNotice(error.message)
@@ -397,16 +419,65 @@ function App() {
                   {!selectedPaperId && results.length > 0 && <aside className="discover-aside"><EmptyState icon="book" title="Curious about a paper?">Open any result to read its abstract and find related research.</EmptyState></aside>}
                 </section>
               ) : (
-                <section className="welcome-grid">
-                  <div className="welcome-card welcome-card-primary">
-                    <div className="welcome-card-icon"><Icon name="search" size={19} /></div>
-                    <div><span className="eyebrow">START WITH A QUESTION</span><h2>Turn a topic into a reading list</h2><p>Search a phrase from your research question, a paper title, or a method you want to understand.</p></div>
-                  </div>
-                  <div className="welcome-card">
-                    <div className="welcome-card-icon mint"><Icon name="spark" size={19} /></div>
-                    <div><span className="eyebrow">FOLLOW THE CONNECTIONS</span><h2>Find similar papers</h2><p>Open a result to see papers with similar title and abstract text.</p></div>
-                  </div>
-                </section>
+                <>
+                  {personalizedPapers.length > 0 && (
+                    <section className="personalized-section" aria-label="Personalized Recommendations" style={{ marginTop: '24px' }}>
+                      <div className="results-heading">
+                        <div>
+                          <span className="eyebrow" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <Icon name="spark" size={13} /> FOR YOU · AI RECOMMENDATIONS
+                          </span>
+                          <h2>Recommended for Your Research Profile</h2>
+                          <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--muted)' }}>
+                            Based on your bookmarked papers and saved research interests.
+                          </p>
+                        </div>
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          onClick={() => loadPersonalized()}
+                          disabled={personalizedLoading}
+                          title="Refresh personalized recommendations"
+                        >
+                          <Icon name="spark" size={13} /> {personalizedLoading ? 'Updating…' : 'Refresh Feed'}
+                        </button>
+                      </div>
+                      <div className="paper-list">
+                        {personalizedPapers.map((paper) => (
+                          <PaperCard
+                            key={paper.paper_id}
+                            paper={paper}
+                            onOpen={openPaper}
+                            bookmarked={bookmarkIds.has(paper.paper_id)}
+                            onBookmark={toggleBookmark}
+                            bookmarkDisabled={activityAvailable !== true}
+                            bookmarkPending={pendingBookmarkIds.has(paper.paper_id)}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  {selectedPaperId && (
+                    <DetailPanel
+                      paperId={selectedPaperId}
+                      onClose={() => setSelectedPaperId(null)}
+                      onOpenPaper={openPaper}
+                      bookmarked={bookmarkIds.has(selectedPaperId)}
+                      onBookmark={toggleBookmark}
+                      activityDisabled={!activityAvailable}
+                    />
+                  )}
+                  <section className="welcome-grid" style={personalizedPapers.length > 0 ? { marginTop: '32px' } : undefined}>
+                    <div className="welcome-card welcome-card-primary">
+                      <div className="welcome-card-icon"><Icon name="search" size={19} /></div>
+                      <div><span className="eyebrow">START WITH A QUESTION</span><h2>Turn a topic into a reading list</h2><p>Search a phrase from your research question, a paper title, or a method you want to understand.</p></div>
+                    </div>
+                    <div className="welcome-card">
+                      <div className="welcome-card-icon mint"><Icon name="spark" size={19} /></div>
+                      <div><span className="eyebrow">FOLLOW THE CONNECTIONS</span><h2>Find similar papers</h2><p>Open a result to see papers with similar title and abstract text.</p></div>
+                    </div>
+                  </section>
+                </>
               )}
             </>
           )}
@@ -455,7 +526,7 @@ function App() {
               <ActivityGate available={activityAvailable} loading={activityLoading} error={activityError} onRetry={loadActivity}>
                 <form className="interests-card" onSubmit={saveInterests}>
                   <label htmlFor="interest-list">Your topics</label>
-                  <p>Enter one topic or category per line. These are saved as session preferences; they do not filter search results.</p>
+                  <p>Enter one topic or category per line. The AI recommendation engine uses these along with your bookmarks to personalize your Discover feed.</p>
                   <div className="interest-add-row">
                     <label className="sr-only" htmlFor="new-interest">Add a research topic</label>
                     <input id="new-interest" value={interestInput} maxLength="200" onChange={(event) => setInterestInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addInterest() } }} placeholder="Add a topic, e.g. graph neural networks" />

@@ -233,6 +233,129 @@ class ResearchPaperRecommender:
             )
         return results
 
+    def recommend_for_profile(
+        self,
+        *,
+        paper_ids: list[str] | None = None,
+        interest_terms: list[str] | None = None,
+        category: str | None = None,
+        top_k: int = 10,
+        cluster_aware: bool = False,
+        candidate_pool: int = 100,
+        diversity_penalty: float = 0.15,
+    ) -> list[dict]:
+        if top_k < 1:
+            return []
+
+        excluded_indices: list[int] = []
+        vecs = []
+        weights = []
+
+        if paper_ids:
+            for pid in paper_ids:
+                idx = self.id_to_index.get(pid)
+                if idx is not None:
+                    excluded_indices.append(idx)
+                    v = self.matrix[idx]
+                    if v.nnz > 0:
+                        vecs.append(v)
+                        weights.append(1.0)
+
+        if interest_terms:
+            clean_terms = " ".join(" ".join(t.split()) for t in interest_terms if t.strip())
+            if clean_terms:
+                iv = self.vectorizer.transform([clean_terms])
+                if iv.nnz > 0:
+                    vecs.append(iv)
+                    weights.append(1.5)
+
+        if not vecs:
+            return []
+
+        combined = vecs[0].multiply(weights[0])
+        for v, w in zip(vecs[1:], weights[1:]):
+            combined = combined + v.multiply(w)
+        combined = normalize(combined.tocsr(), norm="l2")
+
+        scores = np.asarray(
+            cosine_similarity(combined, self.matrix, dense_output=True), dtype=np.float32
+        ).ravel()
+
+        for idx in excluded_indices:
+            scores[idx] = -np.inf
+
+        valid_indices = np.flatnonzero(np.isfinite(scores))
+        if valid_indices.size == 0:
+            return []
+        scores[valid_indices] = np.clip(scores[valid_indices], 0.0, 1.0)
+
+        if category:
+            cat_norm = category.strip().casefold()
+            valid_indices = np.array(
+                [
+                    i
+                    for i in valid_indices
+                    if any(t.casefold() == cat_norm for t in self.papers[i].terms)
+                ],
+                dtype=int,
+            )
+            if valid_indices.size == 0:
+                return []
+
+        count = min(max(top_k, candidate_pool if cluster_aware else top_k), valid_indices.size)
+        order = np.lexsort((valid_indices, -scores[valid_indices]))
+        candidate_indices = valid_indices[order[:count]]
+
+        if cluster_aware:
+            if self.cluster_labels is None:
+                raise RuntimeError("Fit clusters before requesting cluster-aware recommendations")
+            selected: list[int] = []
+            remaining = list(candidate_indices)
+            while remaining and len(selected) < top_k:
+                best_position = 0
+                best_value = -float("inf")
+                for position, index in enumerate(remaining):
+                    same_cluster = sum(
+                        self.cluster_labels[index] == self.cluster_labels[chosen]
+                        for chosen in selected
+                    )
+                    value = float(scores[index]) - diversity_penalty * same_cluster
+                    if value > best_value:
+                        best_value, best_position = value, position
+                selected.append(int(remaining.pop(best_position)))
+            candidate_indices = np.asarray(selected, dtype=int)
+        else:
+            candidate_indices = candidate_indices[:top_k]
+
+        feature_names = getattr(self, "_feature_names", None)
+        if feature_names is None:
+            feature_names = self.vectorizer.get_feature_names_out()
+            self._feature_names = feature_names
+
+        results = []
+        for index in candidate_indices:
+            idx = int(index)
+            cand_vec = self.matrix[idx]
+            prod = combined.multiply(cand_vec)
+            matching_terms: list[str] = []
+            if prod.nnz > 0:
+                col_indices = prod.indices
+                data_values = prod.data
+                top_pos = np.argsort(-data_values)[:5]
+                matching_terms = [str(feature_names[col_indices[p]]) for p in top_pos]
+
+            results.append(
+                {
+                    "paper_id": self.papers[idx].paper_id,
+                    "title": self.papers[idx].title,
+                    "abstract": self.papers[idx].abstract,
+                    "terms": list(self.papers[idx].terms),
+                    "similarity": float(scores[idx]),
+                    "matching_terms": matching_terms,
+                }
+            )
+        return results
+
     def fit_clusters(
         self,
         *,

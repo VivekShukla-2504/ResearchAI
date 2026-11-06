@@ -224,3 +224,29 @@ def test_startup_loads_serialized_artifact_once_without_refitting(tmp_path, monk
         assert client.get("/papers/search", params={"q": "graph"}).status_code == 200
         assert client.get("/health").status_code == 200
     assert calls == [artifact]
+
+
+def test_personalized_recommendations():
+    engine = build_engine()
+    client, store = client_for(engine=engine)
+    with client:
+        # Initially empty bookmarks and interests
+        empty = client.get("/papers/recommendations/personalized")
+        assert empty.status_code == 200
+        assert empty.json()["recommendations"] == []
+        assert empty.json()["based_on"] == {"bookmarks_count": 0, "interests_count": 0}
+
+        # Add an interest
+        client.put("/session/interests", json={"terms": ["vision", "image"]})
+        personalized = client.get("/papers/recommendations/personalized")
+        assert personalized.status_code == 200
+        recs = personalized.json()["recommendations"]
+        assert len(recs) > 0
+        assert recs[0]["title"] == "Image segmentation"
+        assert personalized.json()["based_on"]["interests_count"] == 2
+
+        # Also via /session/recommendations alias
+        alias = client.get("/session/recommendations")
+        assert alias.status_code == 200
+        assert len(alias.json()["recommendations"]) > 0
+

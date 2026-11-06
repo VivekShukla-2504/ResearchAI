@@ -301,6 +301,7 @@ def test_health_and_auth_recovery_routes_remain_public(monkeypatch):
     client, store = client_for(engine=build_engine())
     no_auth = {"Authorization": ""}
     with client:
+        assert client.get("/", headers=no_auth).status_code == 200
         assert client.get("/health", headers=no_auth).status_code == 200
         sent = client.post(
             "/auth/send-otp",

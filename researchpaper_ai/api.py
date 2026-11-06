@@ -492,6 +492,16 @@ def create_app(
             raise HTTPException(status_code=404, detail="No user found with this email.")
         return {"message": "Password reset successfully. You can now log in with your new password."}
 
+    @application.get("/")
+    def root() -> dict:
+        return {
+            "name": "ResearchPaper AI API",
+            "version": "0.3.0",
+            "status": "online",
+            "health_check": "/health",
+            "docs": "/docs",
+        }
+
     @application.get("/health")
     def health(request: Request) -> dict:
         engine = engine_for(request)

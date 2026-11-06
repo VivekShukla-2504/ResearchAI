@@ -10,7 +10,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from pymongo import ASCENDING, DESCENDING, MongoClient
-from pymongo.errors import PyMongoError
+from pymongo.errors import DuplicateKeyError, PyMongoError
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -18,6 +18,10 @@ load_dotenv()
 
 class MongoUnavailable(RuntimeError):
     """Raised when an optional activity persistence operation cannot run."""
+
+
+class DuplicateUserError(ValueError):
+    """Raised when attempting to create a user whose email or ID already exists."""
 
 
 class MongoStore:
@@ -77,6 +81,9 @@ class MongoStore:
     def _run(self, operation):
         try:
             return operation()
+        except DuplicateKeyError:
+            # Business conflict: re-raise directly without closing driver or disabling store
+            raise
         except PyMongoError as exc:
             logger.warning("MongoDB operation failed; disabling activity persistence (%s)", type(exc).__name__)
             self.close()
@@ -171,11 +178,12 @@ class MongoStore:
         is_verified: bool = False,
         picture: str | None = None,
     ) -> dict[str, Any]:
+        clean_email = email.strip().lower()
         now = datetime.now(timezone.utc)
         user_id = f"user_{secrets.token_hex(12)}"
         user_doc = {
             "user_id": user_id,
-            "email": email.strip().lower(),
+            "email": clean_email,
             "name": name.strip(),
             "password_hash": password_hash,
             "token_version": 0,
@@ -185,7 +193,10 @@ class MongoStore:
             "created_at": now,
             "updated_at": now,
         }
-        self._run(lambda: self._collection("users").insert_one(user_doc))
+        try:
+            self._run(lambda: self._collection("users").insert_one(user_doc))
+        except DuplicateKeyError as exc:
+            raise DuplicateUserError(f"An account with email {clean_email} already exists.") from exc
         clean_user = dict(user_doc)
         clean_user.pop("password_hash", None)
         clean_user.pop("_id", None)

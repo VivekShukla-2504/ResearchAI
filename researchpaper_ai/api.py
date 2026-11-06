@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 from .data import Paper
 from .engine import ResearchPaperRecommender
 from .model_artifact import load_model_artifact
-from .mongo_store import MongoStore, MongoUnavailable
+from .mongo_store import DuplicateUserError, MongoStore, MongoUnavailable
 from .auth import (
     hash_password,
     verify_password,
@@ -361,13 +361,28 @@ def create_app(
     @application.post("/auth/send-otp")
     def send_otp(payload: SendOtpRequest, request: Request) -> dict:
         store = mongo_for(request)
+        clean_email = payload.email.strip().lower()
+        if payload.purpose == "signup":
+            existing = store.get_user_by_email(clean_email)
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="An account with this email already exists. Please sign in instead.",
+                )
+        elif payload.purpose == "reset_password":
+            existing = store.get_user_by_email(clean_email)
+            if not existing:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No account found with this email. Please check your email or create an account.",
+                )
         otp = generate_otp(6)
         ttl = int(os.getenv("OTP_TTL_MINUTES", "10"))
-        store.save_otp(payload.email, otp, payload.purpose, ttl_minutes=ttl)
-        sent = send_otp_email(payload.email, otp, payload.purpose)
+        store.save_otp(clean_email, otp, payload.purpose, ttl_minutes=ttl)
+        sent = send_otp_email(clean_email, otp, payload.purpose)
         return {
-            "message": f"Verification code sent to {payload.email}",
-            "email": payload.email,
+            "message": f"Verification code sent to {clean_email}",
+            "email": clean_email,
             "purpose": payload.purpose,
             "dispatched": sent,
         }
@@ -375,29 +390,56 @@ def create_app(
     @application.post("/auth/signup", response_model=AuthResponse)
     def signup(payload: SignupRequest, request: Request) -> AuthResponse:
         store = mongo_for(request)
-        verified = store.verify_and_consume_otp(payload.email, payload.otp, "signup")
-        if not verified:
-            raise HTTPException(status_code=400, detail="Invalid or expired verification code.")
-        existing = store.get_user_by_email(payload.email)
+        clean_email = payload.email.strip().lower()
+        existing = store.get_user_by_email(clean_email)
         if existing:
-            raise HTTPException(status_code=400, detail="An account with this email already exists.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An account with this email already exists. Please sign in instead.",
+            )
+        verified = store.verify_and_consume_otp(clean_email, payload.otp, "signup")
+        if not verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification code.",
+            )
         pwd_hash = hash_password(payload.password)
-        user = store.create_user(
-            email=payload.email,
-            name=payload.name,
-            password_hash=pwd_hash,
-            auth_provider="local",
-            is_verified=True,
-        )
+        try:
+            user = store.create_user(
+                email=clean_email,
+                name=payload.name,
+                password_hash=pwd_hash,
+                auth_provider="local",
+                is_verified=True,
+            )
+        except DuplicateUserError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An account with this email already exists. Please sign in instead.",
+            ) from exc
         token = issue_token(request, user)
         return AuthResponse(token=token, user=UserProfile(**user), message="Account created successfully.")
 
     @application.post("/auth/login", response_model=AuthResponse)
     def login(payload: LoginRequest, request: Request) -> AuthResponse:
         store = mongo_for(request)
-        user = store.get_user_by_email(payload.email)
-        if not user or not verify_password(payload.password, user.get("password_hash")):
-            raise HTTPException(status_code=401, detail="Invalid email or password.")
+        clean_email = payload.email.strip().lower()
+        user = store.get_user_by_email(clean_email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password.",
+            )
+        if not user.get("password_hash") and user.get("auth_provider") == "google":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="This account was created with Google. Please use Google Sign-In or reset your password.",
+            )
+        if not verify_password(payload.password, user.get("password_hash")):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password.",
+            )
         token = issue_token(request, user)
         clean_user = dict(user)
         clean_user.pop("password_hash", None)
@@ -406,18 +448,25 @@ def create_app(
     @application.post("/auth/login-otp", response_model=AuthResponse)
     def login_with_otp(payload: LoginOtpRequest, request: Request) -> AuthResponse:
         store = mongo_for(request)
-        verified = store.verify_and_consume_otp(payload.email, payload.otp, "login")
+        clean_email = payload.email.strip().lower()
+        verified = store.verify_and_consume_otp(clean_email, payload.otp, "login")
         if not verified:
-            raise HTTPException(status_code=400, detail="Invalid or expired verification code.")
-        user = store.get_user_by_email(payload.email)
-        if not user:
-            name = payload.email.split("@")[0].capitalize()
-            user = store.create_user(
-                email=payload.email,
-                name=name,
-                auth_provider="local",
-                is_verified=True,
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification code.",
             )
+        user = store.get_user_by_email(clean_email)
+        if not user:
+            name = clean_email.split("@")[0].capitalize()
+            try:
+                user = store.create_user(
+                    email=clean_email,
+                    name=name,
+                    auth_provider="local",
+                    is_verified=True,
+                )
+            except DuplicateUserError:
+                user = store.get_user_by_email(clean_email)
         token = issue_token(request, user)
         clean_user = dict(user)
         clean_user.pop("password_hash", None)
@@ -481,15 +530,25 @@ def create_app(
     @application.post("/auth/reset-password")
     def reset_password(payload: ResetPasswordRequest, request: Request) -> dict:
         store = mongo_for(request)
-        verified = store.verify_and_consume_otp(payload.email, payload.otp, "reset_password")
-        if not verified:
-            raise HTTPException(status_code=400, detail="Invalid or expired verification code.")
-        user = store.get_user_by_email(payload.email)
+        clean_email = payload.email.strip().lower()
+        user = store.get_user_by_email(clean_email)
         if not user:
-            raise HTTPException(status_code=404, detail="No user found with this email.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No account found with this email. Please check your email or create an account.",
+            )
+        verified = store.verify_and_consume_otp(clean_email, payload.otp, "reset_password")
+        if not verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification code.",
+            )
         new_hash = hash_password(payload.new_password)
         if not store.update_password_and_revoke_tokens(user["user_id"], new_hash):
-            raise HTTPException(status_code=404, detail="No user found with this email.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No account found with this email.",
+            )
         return {"message": "Password reset successfully. You can now log in with your new password."}
 
     @application.api_route("/", methods=["GET", "HEAD"])

@@ -66,10 +66,14 @@ class MemoryActivityStore:
         self, *, email, name, password_hash=None, auth_provider="local",
         is_verified=False, picture=None,
     ):
+        clean_email = email.strip().lower()
+        if any(u["email"] == clean_email for u in self.users.values()):
+            from researchpaper_ai.mongo_store import DuplicateUserError
+            raise DuplicateUserError(f"An account with email {clean_email} already exists.")
         user_id = f"user_{len(self.users) + 1}"
         user = {
             "user_id": user_id,
-            "email": email.strip().lower(),
+            "email": clean_email,
             "name": name.strip(),
             "password_hash": password_hash,
             "token_version": 0,
@@ -220,6 +224,64 @@ def test_password_reset_revokes_existing_tokens_and_new_login_works():
         assert client.get(
             "/auth/me", headers={"Authorization": f"Bearer {login.json()['token']}"}
         ).status_code == 200
+
+
+def test_duplicate_registration_rejected_at_send_otp_and_signup():
+    client, store = client_for(engine=build_engine())
+    with client:
+        # User 1 is session-owner@example.edu (already created in client_for)
+        # Attempting to send OTP for signup with existing email should fail immediately
+        send_otp_res = client.post(
+            "/auth/send-otp",
+            json={"email": "session-owner@example.edu", "purpose": "signup"},
+        )
+        assert send_otp_res.status_code == 400
+        assert "already exists" in send_otp_res.json()["detail"]
+
+        # Attempting signup directly with existing email should also fail
+        store.otps[("session-owner@example.edu", "signup")] = "999999"
+        signup_res = client.post(
+            "/auth/signup",
+            json={
+                "name": "Imposter",
+                "email": "session-owner@example.edu",
+                "password": "some-password",
+                "otp": "999999",
+            },
+        )
+        assert signup_res.status_code == 400
+        assert "already exists" in signup_res.json()["detail"]
+
+
+def test_reset_password_for_nonexistent_email_rejected_early():
+    client, store = client_for(engine=build_engine())
+    with client:
+        # Non-existent email should be rejected at send-otp
+        send_otp_res = client.post(
+            "/auth/send-otp",
+            json={"email": "not-registered@example.com", "purpose": "reset_password"},
+        )
+        assert send_otp_res.status_code == 404
+        assert "No account found" in send_otp_res.json()["detail"]
+
+
+def test_google_account_login_with_password_gives_helpful_guidance():
+    client, store = client_for(engine=build_engine())
+    # Create Google-only user
+    google_user = store.create_user(
+        email="google-researcher@example.com",
+        name="Google Researcher",
+        auth_provider="google",
+        password_hash=None,
+        is_verified=True,
+    )
+    with client:
+        login_res = client.post(
+            "/auth/login",
+            json={"email": "google-researcher@example.com", "password": "random-password"},
+        )
+        assert login_res.status_code == 401
+        assert "created with Google" in login_res.json()["detail"]
 
 
 def test_logout_revokes_all_existing_tokens():

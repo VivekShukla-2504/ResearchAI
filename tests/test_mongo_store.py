@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from pymongo.errors import ServerSelectionTimeoutError
+from pymongo.errors import DuplicateKeyError, ServerSelectionTimeoutError
 
-from researchpaper_ai.mongo_store import MongoStore, MongoUnavailable
+from researchpaper_ai.mongo_store import DuplicateUserError, MongoStore, MongoUnavailable
 
 
 def test_connect_creates_only_activity_indexes(monkeypatch):
@@ -127,3 +127,24 @@ def test_user_and_otp_operations(monkeypatch):
     database.otps.delete_one.assert_called_once()
     store.close()
     client.close.assert_called_once()
+
+
+def test_duplicate_key_error_does_not_close_store_and_raises_duplicate_user_error(monkeypatch):
+    client = MagicMock()
+    database = MagicMock()
+    collections = {name: MagicMock() for name in ("users", "bookmarks")}
+    database.__getitem__.side_effect = collections.__getitem__
+    database.users = collections["users"]
+    client.__getitem__.return_value = database
+    monkeypatch.setattr("researchpaper_ai.mongo_store.MongoClient", lambda *args, **kwargs: client)
+    store = MongoStore("mongodb://example", "test_db")
+    assert store.connect() is True
+
+    database.users.insert_one.side_effect = DuplicateKeyError("E11000 duplicate key error")
+
+    with pytest.raises(DuplicateUserError, match="already exists"):
+        store.create_user(email="duplicate@example.com", name="Duplicate")
+
+    # Ensure store is STILL available and client was not closed
+    assert store.available is True
+    assert store.client is not None

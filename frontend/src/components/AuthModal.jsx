@@ -292,7 +292,49 @@ export default function AuthModal({
           </div>
         )}
 
-        {error && <div className="notice notice-error" role="alert">{error}</div>}
+        {error && (
+          <div className="notice notice-error" role="alert">
+            <span>{error}</span>
+            {/already exists/i.test(error) && mode !== 'login' && (
+              <button
+                type="button"
+                className="notice-action"
+                onClick={() => {
+                  setMode('login')
+                  setError('')
+                  setSuccess('Please enter your password or sign in with Google.')
+                }}
+              >
+                Sign in now →
+              </button>
+            )}
+            {/no account found/i.test(error) && mode !== 'signup' && (
+              <button
+                type="button"
+                className="notice-action"
+                onClick={() => {
+                  setMode('signup')
+                  setError('')
+                  setSuccess('Create your account below.')
+                }}
+              >
+                Create account →
+              </button>
+            )}
+            {/created with google/i.test(error) && (
+              <button
+                type="button"
+                className="notice-action"
+                onClick={() => {
+                  setMode('forgot')
+                  setError('')
+                }}
+              >
+                Set password →
+              </button>
+            )}
+          </div>
+        )}
         {success && <div className="notice notice-info" role="status">{success}</div>}
 
         {/* Form: Standard Password Login */}

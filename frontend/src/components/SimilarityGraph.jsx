@@ -90,9 +90,9 @@ export default function SimilarityGraph({ seedPaper, recommendations = [], onOpe
                 />
                 {/* Edge Match Badge */}
                 <rect
-                  x={midX - 18}
+                  x={midX - 20}
                   y={midY - 9}
-                  width="36"
+                  width="40"
                   height="18"
                   rx="4"
                   className="edge-badge-bg"
@@ -103,7 +103,7 @@ export default function SimilarityGraph({ seedPaper, recommendations = [], onOpe
                   textAnchor="middle"
                   className="edge-badge-text"
                 >
-                  {sat.pct}%
+                  {(sat.similarity ?? (sat.pct / 100)).toFixed(2)}
                 </text>
               </g>
             )
@@ -168,9 +168,12 @@ export default function SimilarityGraph({ seedPaper, recommendations = [], onOpe
         {hoveredPaper && (
           <div className="graph-tooltip-card">
             <div className="tooltip-topline">
-              <span className="tooltip-match">{hoveredPaper.pct}% Thematic Match</span>
+              <span className="tooltip-match">
+                Text similarity: {(hoveredPaper.similarity ?? (hoveredPaper.pct / 100)).toFixed(2)}
+              </span>
               <span className="tooltip-id">{hoveredPaper.terms?.[0] || 'Paper'}</span>
             </div>
+            <div className="tooltip-subline">Cosine text overlap · Title & abstract</div>
             <h4 className="tooltip-title">{hoveredPaper.title}</h4>
             {hoveredPaper.matching_terms && hoveredPaper.matching_terms.length > 0 && (
               <div className="tooltip-concepts">

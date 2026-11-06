@@ -2,10 +2,12 @@ import Icon from './Icon.jsx'
 
 export function SimilarityScore({ value }) {
   if (typeof value !== 'number') return null
-  const pct = Math.min(100, Math.max(0, Math.round(value * 100)))
   return (
-    <span className="similarity-score" title={`Cosine similarity score: ${value.toFixed(4)}`}>
-      <span className="match-badge">{pct}% match</span>
+    <span
+      className="similarity-score"
+      title={`Cosine similarity: ${value.toFixed(4)}. Reflects title & abstract textual overlap, not relevance probability.`}
+    >
+      <span className="match-badge">Text similarity: {value.toFixed(2)}</span>
       <span className="score-raw">{value.toFixed(3)}</span>
     </span>
   )
@@ -52,6 +54,15 @@ export default function PaperCard({ paper, onOpen, bookmarked, onBookmark, bookm
       <div className="paper-card-footer">
         {typeof paper.similarity === 'number' ? <SimilarityScore value={paper.similarity} /> : <span className="paper-meta">Research paper</span>}
         <div className="footer-actions">
+          <a
+            className="scholar-link"
+            href={`https://arxiv.org/search/?query=${encodeURIComponent(paper.title)}&searchtype=title`}
+            target="_blank"
+            rel="noreferrer"
+            title="Search paper on arXiv"
+          >
+            arXiv
+          </a>
           <a
             className="scholar-link"
             href={`https://scholar.google.com/scholar?q=${encodeURIComponent(paper.title)}`}

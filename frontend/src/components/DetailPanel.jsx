@@ -82,6 +82,16 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
             <h2>{paper.title}</h2>
 
             <div className="detail-actions-bar">
+              <button
+                className={`action-pill bookmark-pill ${bookmarked ? 'is-saved' : ''}`}
+                type="button"
+                onClick={() => paper && onBookmark(paper)}
+                disabled={activityDisabled}
+                title={activityDisabled ? 'Activity storage unavailable' : bookmarked ? 'Saved · Click to remove' : 'Save paper'}
+              >
+                <Icon name="bookmark" size={14} />
+                <span>{bookmarked ? 'Saved' : 'Save paper'}</span>
+              </button>
               <a
                 className="action-pill external-link"
                 href={`https://scholar.google.com/scholar?q=${encodeURIComponent(paper.title)}`}

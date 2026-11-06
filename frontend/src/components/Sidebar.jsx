@@ -7,7 +7,7 @@ const links = [
   { id: 'interests', label: 'Research interests', icon: 'spark' },
 ]
 
-export default function Sidebar({ activeView, onNavigate, mongoAvailable }) {
+export default function Sidebar({ activeView, onNavigate, mongoAvailable, currentUser }) {
   return (
     <aside className="sidebar">
       <a className="brand" href="#discover" onClick={(event) => { event.preventDefault(); onNavigate('discover') }}>
@@ -34,11 +34,18 @@ export default function Sidebar({ activeView, onNavigate, mongoAvailable }) {
       <div className="sidebar-spacer" />
       <div className="sidebar-note">
         <span className="sidebar-note-icon"><Icon name="spark" size={16} /></span>
-        <strong>Find your next idea</strong>
-        <p>Search a title, method, or research question to explore related work.</p>
+        <strong>{currentUser ? 'Cloud Sync Active' : 'Find your next idea'}</strong>
+        <p>{currentUser ? `Signed in as ${currentUser.name || currentUser.email}. Your library is synced to the cloud.` : 'Search a title, method, or research question to explore related work.'}</p>
         <button onClick={() => onNavigate('discover')}>Start exploring <Icon name="arrow" size={14} /></button>
       </div>
-      <div className="sidebar-footer"><span className="status-dot" />{mongoAvailable ? 'Activity storage connected' : 'Local research workspace'}</div>
+      <div className="sidebar-footer">
+        <span className={`status-dot ${currentUser ? 'status-cloud' : ''}`} />
+        {currentUser
+          ? `Cloud sync · ${currentUser.name || currentUser.email}`
+          : mongoAvailable
+          ? 'Guest session · Local'
+          : 'Local research workspace'}
+      </div>
     </aside>
   )
 }

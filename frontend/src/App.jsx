@@ -26,6 +26,17 @@ const CATEGORY_FILTERS = [
   { id: 'cs.RO', label: 'Robotics' },
 ]
 
+const POPULAR_TOPICS = [
+  'Graph Neural Networks',
+  'Large Language Models',
+  'Reinforcement Learning',
+  'Computer Vision',
+  'Diffusion Models',
+  'Transformers',
+  'Self-Supervised Learning',
+  'Robotics',
+]
+
 function InlineNotice({ kind = 'info', children, action }) {
   return <div className={`notice notice-${kind}`} role={kind === 'error' ? 'alert' : 'status'}>{children}{action}</div>
 }
@@ -326,17 +337,18 @@ function App() {
   }
 
   async function saveInterests(event) {
-    event.preventDefault()
+    if (event) event.preventDefault()
     if (!activityAvailable) return
-    const terms = interestDraft.split('\n').map((term) => term.trim()).filter(Boolean)
+    const terms = interests.map((t) => t.trim()).filter(Boolean)
     setSavingInterests(true)
     setNotice('')
     try {
       const response = await api.saveInterests(terms)
-      setInterests(response.terms || [])
-      setInterestDraft((response.terms || []).join('\n'))
+      const updated = response.terms || []
+      setInterests(updated)
+      setInterestDraft(updated.join('\n'))
       setActivityError('')
-      setNotice('Research interests saved for this local session.')
+      showBookmarkToast('success', currentUser ? 'Saved research interests to your cloud profile!' : 'Saved research interests for this session!')
       loadPersonalized()
     } catch (error) {
       if (error instanceof ApiError && error.status === 503) setActivityAvailable(false)
@@ -346,24 +358,31 @@ function App() {
     }
   }
 
-  function addInterest() {
-    const nextInterest = interestInput.trim()
+  function addInterest(customTopic) {
+    const nextInterest = (customTopic || interestInput).trim()
     if (!nextInterest) return
-    const current = interestDraft.split('\n').map((term) => term.trim()).filter(Boolean)
-    if (current.some((term) => term.toLocaleLowerCase() === nextInterest.toLocaleLowerCase())) {
-      setNotice('That topic is already in your list.')
+    if (interests.some((term) => term.toLowerCase() === nextInterest.toLowerCase())) {
+      setNotice(`"${nextInterest}" is already in your interests.`)
       return
     }
-    setInterestDraft([...current, nextInterest].join('\n'))
+    const updated = [...interests, nextInterest]
+    setInterests(updated)
+    setInterestDraft(updated.join('\n'))
     setInterestInput('')
     setNotice('')
+  }
+
+  function removeInterest(topicToRemove) {
+    const updated = interests.filter((term) => term.toLowerCase() !== topicToRemove.toLowerCase())
+    setInterests(updated)
+    setInterestDraft(updated.join('\n'))
   }
 
   const pageTitle = viewNames[view]
 
   return (
     <div className="app-shell">
-      <Sidebar activeView={view} onNavigate={(next) => { setView(next); setNotice('') }} mongoAvailable={activityAvailable === true} />
+      <Sidebar activeView={view} onNavigate={(next) => { setView(next); setNotice('') }} mongoAvailable={activityAvailable === true} currentUser={currentUser} />
       <div className="main-column">
         <header className="topbar">
           <div className="breadcrumbs"><span>Workspace</span><Icon name="chevron" size={14} /><strong>{pageTitle}</strong></div>
@@ -423,9 +442,9 @@ function App() {
               <section className={`hero ${hasSearched ? 'hero-compact' : ''}`}>
                 <div className="hero-orb hero-orb-one" /><div className="hero-orb hero-orb-two" />
                 <div className="hero-content">
-                  <div className="hero-eyebrow"><span className="eyebrow-star"><Icon name="spark" size={13} /></span> RESEARCH, CONNECTED</div>
+                  <div className="hero-eyebrow"><span className="eyebrow-star"><Icon name="spark" size={13} /></span> ACADEMIC RESEARCH PLATFORM · 41,120 PAPERS INDEXED</div>
                   <h1>{hasSearched ? 'Explore the literature' : <>Explore the universe<br />of <em>research.</em></>}</h1>
-                  <p>Follow ideas across the literature. Search papers by topic, title, or the question you are trying to answer.</p>
+                  <p>Follow ideas across the literature. Search papers by topic, title, or research question. Results and recommendations are ranked using cosine text similarity on arXiv abstracts.</p>
                   <SearchBar
                     value={query}
                     onChange={setQuery}
@@ -455,14 +474,69 @@ function App() {
                 <section className="discovery-layout" aria-live="polite">
                   <div className="results-column">
                     <div className="results-heading">
-                      <div><span className="eyebrow">SEARCH RESULTS</span><h2>{searchLoading ? 'Searching papers…' : results.length ? 'Papers to explore' : 'No matching papers'}</h2></div>
-                      {!searchLoading && results.length > 0 && <span className="result-count">{results.length} returned</span>}
+                      <div>
+                        <span className="eyebrow">SEARCH RESULTS</span>
+                        <h2>{searchLoading ? 'Searching papers…' : results.length ? 'Papers to explore' : 'No matching papers'}</h2>
+                        {!searchLoading && (
+                          <div className="results-meta-row">
+                            <span className="result-count">
+                              {results.length} {results.length === 1 ? 'paper' : 'papers'} returned · Ranked by text similarity
+                            </span>
+                            {selectedCategory && (
+                              <button
+                                className="filter-reset-pill"
+                                type="button"
+                                onClick={() => handleCategorySelect('')}
+                                title="Clear category filter"
+                              >
+                                Filter: {CATEGORY_FILTERS.find((c) => c.id === selectedCategory)?.label || selectedCategory} <Icon name="close" size={11} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="results-heading-actions">
+                        <button
+                          className="secondary-action reset-search-btn"
+                          type="button"
+                          onClick={() => { setHasSearched(false); setQuery(''); setSelectedCategory('') }}
+                          title="Return to discovery home"
+                        >
+                          <Icon name="close" size={13} /> Reset search
+                        </button>
+                      </div>
                     </div>
                     {searchLoading ? <LoadingList /> : results.length ? (
                       <div className="paper-list">
                         {results.map((paper) => <PaperCard key={paper.paper_id} paper={paper} onOpen={openPaper} bookmarked={bookmarkIds.has(paper.paper_id)} onBookmark={toggleBookmark} bookmarkDisabled={activityAvailable !== true} bookmarkPending={pendingBookmarkIds.has(paper.paper_id)} />)}
                       </div>
-                    ) : <EmptyState icon="search" title="Try a broader search" >No papers were returned for “{query}”. Try another title, method, or keyword.</EmptyState>}
+                    ) : (
+                      <EmptyState icon="search" title="No matching papers found">
+                        <div className="no-results-content">
+                          <p>No papers matched <strong>“{query}”</strong>{selectedCategory ? ` in ${CATEGORY_FILTERS.find((c) => c.id === selectedCategory)?.label}` : ''}.</p>
+                          <div className="empty-suggestions">
+                            <span className="suggestions-kicker">Helpful tips:</span>
+                            <ul>
+                              <li>Try searching broader keywords (e.g. <em>attention mechanisms</em> instead of full sentences)</li>
+                              {selectedCategory && (
+                                <li>
+                                  <button className="text-action-link" type="button" onClick={() => handleCategorySelect('')}>
+                                    Clear category filter to search across all fields
+                                  </button>
+                                </li>
+                              )}
+                              <li>Check spelling or try common AI/ML topics</li>
+                            </ul>
+                            <div className="quick-search-chips">
+                              <span>Try searching:</span>
+                              <button type="button" className="quick-chip" onClick={() => runSearch('deep learning')}>deep learning</button>
+                              <button type="button" className="quick-chip" onClick={() => runSearch('transformer attention')}>transformer attention</button>
+                              <button type="button" className="quick-chip" onClick={() => runSearch('reinforcement learning')}>reinforcement learning</button>
+                            </div>
+                          </div>
+                        </div>
+                      </EmptyState>
+                    )}
                   </div>
                   {selectedPaperId && <DetailPanel paperId={selectedPaperId} onClose={() => setSelectedPaperId(null)} onOpenPaper={openPaper} bookmarked={bookmarkIds.has(selectedPaperId)} onBookmark={toggleBookmark} activityDisabled={!activityAvailable} />}
                   {!selectedPaperId && results.length > 0 && <aside className="discover-aside"><EmptyState icon="book" title="Curious about a paper?">Open any result to read its abstract and find related research.</EmptyState></aside>}
@@ -536,7 +610,7 @@ function App() {
               <PageHeading
                 eyebrow="YOUR LIBRARY"
                 title="Saved papers"
-                description="Keep a session-based reading list of papers you want to revisit."
+                description={currentUser ? `Cloud-synced reading list for ${currentUser.name || currentUser.email}.` : "Keep a session-based reading list of papers you want to revisit."}
                 trailing={
                   bookmarks.length > 0 ? (
                     <div className="dossier-export-actions">
@@ -552,7 +626,14 @@ function App() {
               />
               <ActivityGate available={activityAvailable} loading={activityLoading} error={activityError} onRetry={loadActivity}>{bookmarks.length ? (
                 <div className="paper-list">{bookmarks.map((entry) => <PaperCard key={entry.paper_id} paper={{ ...entry, terms: [], abstract: '' }} onOpen={openPaper} bookmarked onBookmark={toggleBookmark} bookmarkDisabled={activityAvailable !== true} bookmarkPending={pendingBookmarkIds.has(entry.paper_id)} compact />)}</div>
-              ) : <EmptyState icon="bookmark" title="No saved papers yet">Use the bookmark control on a paper to keep it here for this session.</EmptyState>}</ActivityGate>
+              ) : (
+                <EmptyState icon="bookmark" title="No saved papers yet">
+                  <p>Use the bookmark button on any paper to save it to your reading list.</p>
+                  <button className="secondary-action" type="button" onClick={() => setView('discover')}>
+                    <Icon name="compass" size={14} /> Start exploring papers
+                  </button>
+                </EmptyState>
+              )}</ActivityGate>
             </section>
           )}
 
@@ -565,31 +646,116 @@ function App() {
                     <span className="history-icon"><Icon name="clock" size={18} /></span><span className="history-query">{item.query}<small>{new Date(item.created_at).toLocaleString()}</small></span><span className="history-count">{item.result_count} returned</span><Icon name="arrow" size={16} />
                   </button>
                 ))}</div>
-              ) : <EmptyState icon="clock" title="Your search history is empty">Searches are saved here when MongoDB activity storage is available.</EmptyState>}</ActivityGate>
+              ) : (
+                <EmptyState icon="clock" title="Your search history is empty">
+                  <p>Searches will appear here as you explore the literature so you can revisit them anytime.</p>
+                  <button className="secondary-action" type="button" onClick={() => setView('discover')}>
+                    <Icon name="search" size={14} /> Start a search
+                  </button>
+                </EmptyState>
+              )}</ActivityGate>
             </section>
           )}
 
           {view === 'interests' && (
             <section className="content-page">
-              <PageHeading eyebrow="PERSONALIZE YOUR SPACE" title="Research interests" description="Save topics you are exploring for this local browser session." />
+              <PageHeading
+                eyebrow="PERSONALIZE YOUR SPACE"
+                title="Research interests"
+                description={currentUser
+                  ? `Cloud-synced with ${currentUser.name || currentUser.email}. These topics tune your personalized recommendations.`
+                  : "Save research topics to personalize your recommendations for this browser session."}
+              />
               <ActivityGate available={activityAvailable} loading={activityLoading} error={activityError} onRetry={loadActivity}>
                 <form className="interests-card" onSubmit={saveInterests}>
-                  <label htmlFor="interest-list">Your topics</label>
-                  <p>Enter one topic or category per line. The AI recommendation engine uses these along with your bookmarks to personalize your Discover feed.</p>
+                  <div className="interests-card-header">
+                    <label htmlFor="new-interest">Your Research Topics</label>
+                    <p>The AI recommendation engine uses these topics along with your bookmarks to recommend relevant papers on your Discover feed.</p>
+                  </div>
+
                   <div className="interest-add-row">
                     <label className="sr-only" htmlFor="new-interest">Add a research topic</label>
-                    <input id="new-interest" value={interestInput} maxLength="200" onChange={(event) => setInterestInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addInterest() } }} placeholder="Add a topic, e.g. graph neural networks" />
-                    <button className="secondary-action" type="button" onClick={addInterest} disabled={!interestInput.trim()}><Icon name="plus" size={15} />Add topic</button>
+                    <input
+                      id="new-interest"
+                      value={interestInput}
+                      maxLength="200"
+                      onChange={(event) => setInterestInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          addInterest()
+                        }
+                      }}
+                      placeholder="Add a topic or method (e.g. Graph Neural Networks, Diffusion Models)"
+                    />
+                    <button className="secondary-action" type="button" onClick={() => addInterest()} disabled={!interestInput.trim()}>
+                      <Icon name="plus" size={15} /> Add topic
+                    </button>
                   </div>
-                  <textarea id="interest-list" rows="7" maxLength="5000" value={interestDraft} onChange={(event) => setInterestDraft(event.target.value)} placeholder={'Example: graph neural networks\ncs.AI'} />
-                  {interests.length > 0 && <div className="interest-chips" aria-label="Currently saved interests">{interests.map((interest) => <span className="interest-chip" key={interest}><Icon name="spark" size={13} />{interest}</span>)}</div>}
-                  <div className="interests-footer"><span>{interests.length} saved {interests.length === 1 ? 'interest' : 'interests'}</span><button className="primary-action" type="submit" disabled={savingInterests}>{savingInterests ? <span className="button-spinner" /> : <Icon name="check" size={16} />}{savingInterests ? 'Saving…' : 'Save interests'}</button></div>
+
+                  {interests.length > 0 ? (
+                    <div className="interest-chips-container" aria-label="Current research interests">
+                      <span className="chips-label">Active Topics ({interests.length}):</span>
+                      <div className="interest-chips">
+                        {interests.map((topic) => (
+                          <span className="interest-chip interactive-chip" key={topic}>
+                            <Icon name="spark" size={13} />
+                            <span>{topic}</span>
+                            <button
+                              type="button"
+                              className="chip-remove-btn"
+                              onClick={() => removeInterest(topic)}
+                              aria-label={`Remove topic ${topic}`}
+                              title={`Remove ${topic}`}
+                            >
+                              <Icon name="close" size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="interests-empty-hint">
+                      No topics added yet. Add a topic above or pick from popular research fields below.
+                    </div>
+                  )}
+
+                  <div className="suggested-topics-section">
+                    <span className="suggestions-title">Quick add popular fields:</span>
+                    <div className="suggested-topics-list">
+                      {POPULAR_TOPICS.filter((top) => !interests.some((i) => i.toLowerCase() === top.toLowerCase())).map((top) => (
+                        <button
+                          key={top}
+                          type="button"
+                          className="suggested-topic-pill"
+                          onClick={() => addInterest(top)}
+                          title={`Add ${top} to interests`}
+                        >
+                          <Icon name="plus" size={11} /> {top}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="interests-footer">
+                    <span>
+                      {interests.length} {interests.length === 1 ? 'topic' : 'topics'} in profile
+                      {currentUser ? ' · Synced to cloud' : ' · Session local'}
+                    </span>
+                    <button className="primary-action" type="submit" disabled={savingInterests}>
+                      {savingInterests ? <span className="button-spinner" /> : <Icon name="check" size={16} />}
+                      {savingInterests ? 'Saving…' : 'Save interests'}
+                    </button>
+                  </div>
                 </form>
               </ActivityGate>
             </section>
           )}
         </main>
-        <footer className="app-footer"><span>ResearchPaper AI</span><span>Similarity scores describe text similarity; they are not probabilities or accuracy.</span></footer>
+        <footer className="app-footer">
+          <span>ResearchPaper AI · 41,120 papers indexed from arXiv CS/ML</span>
+          <span>Similarity scores describe title and abstract text overlap; they do not represent relevance probability or citation impact.</span>
+        </footer>
       </div>
 
       {selectedPaperId && view !== 'discover' && <DetailPanel paperId={selectedPaperId} onClose={() => setSelectedPaperId(null)} onOpenPaper={openPaper} bookmarked={bookmarkIds.has(selectedPaperId)} onBookmark={toggleBookmark} activityDisabled={!activityAvailable} />}

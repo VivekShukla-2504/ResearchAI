@@ -30,6 +30,7 @@ class PaperResult(BaseModel):
     abstract: str
     terms: list[str]
     similarity: float | None = None
+    matching_terms: list[str] = Field(default_factory=list)
 
 
 class SearchResponse(BaseModel):
@@ -206,6 +207,7 @@ def create_app(
     def search_papers(
         request: Request,
         q: Annotated[str, Query(min_length=1, max_length=512)],
+        category: Annotated[str | None, Query(max_length=64)] = None,
         limit: Annotated[int, Query(ge=1, le=50)] = 10,
         session_id: SessionId = "local-anonymous",
     ) -> SearchResponse:
@@ -213,7 +215,7 @@ def create_app(
         if not query:
             raise HTTPException(status_code=422, detail="Query must contain non-whitespace text.")
         engine = engine_for(request)
-        results = engine.recommend(query=query, top_k=limit)
+        results = engine.recommend(query=query, category=category, top_k=limit)
         history_saved = False
         store = request.app.state.mongo
         if store.available:
@@ -238,11 +240,12 @@ def create_app(
     def get_recommendations(
         paper_id: Annotated[str, ApiPath(min_length=1, max_length=80)],
         request: Request,
+        category: Annotated[str | None, Query(max_length=64)] = None,
         k: Annotated[int, Query(ge=1, le=50)] = 10,
     ) -> RecommendationResponse:
         engine = engine_for(request)
         try:
-            recommendations = engine.recommend(paper_id=paper_id, top_k=k)
+            recommendations = engine.recommend(paper_id=paper_id, category=category, top_k=k)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Paper not found.") from exc
         return RecommendationResponse(paper_id=paper_id, recommendations=recommendations)

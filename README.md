@@ -1,4 +1,4 @@
-﻿# ResearchPaper AI
+# ResearchPaper AI
 
 A research paper finder built around a simple question: **if I have found one useful paper, what should I read next?**
 
@@ -6,9 +6,10 @@ The project indexes arXiv paper titles and abstracts, lets readers search by top
 
 ## What it does
 
-- Search papers by title or research keywords.
-- Open a paper's title, abstract, and categories.
-- Find similar papers and see their cosine similarity scores.
+- Search papers by title or research keywords with optional domain/category filtering (Computer Vision, Machine Learning, AI, NLP, Robotics).
+- Open a paper's title, abstract, and categories with direct external links to Google Scholar and arXiv.
+- Find similar papers with cosine similarity scores and **Explainable AI (XAI) feature attribution** highlighting the top overlapping n-gram concepts.
+- Copy ready-to-use BibTeX citations or export bookmarked papers as a complete Markdown / BibTeX Research Dossier.
 - Save papers, keep search history, and store research interests for the current browser session when MongoDB is available.
 - Continue searching and getting recommendations when MongoDB is offline; activity storage is then unavailable.
 

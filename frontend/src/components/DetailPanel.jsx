@@ -10,6 +10,7 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
   const [loadingRecommendations, setLoadingRecommendations] = useState(false)
   const [error, setError] = useState('')
   const [recommendationError, setRecommendationError] = useState('')
+  const [bibtexCopied, setBibtexCopied] = useState(false)
   const recommendationRequestId = useRef(0)
   const [paperRetry, setPaperRetry] = useState(0)
 
@@ -31,6 +32,22 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
       recommendationRequestId.current += 1
     }
   }, [paperId, paperRetry])
+
+  function copyBibtex() {
+    if (!paper) return
+    const firstWord = (paper.title.split(' ')[0] || 'paper').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+    const citeKey = `${firstWord}_arxiv`
+    const bibtex = `@article{${citeKey},
+  title = {${paper.title.replace(/[{}]/g, '')}},
+  abstract = {${(paper.abstract || '').replace(/[{}]/g, '')}},
+  keywords = {${(paper.terms || []).join(', ')}},
+  year = {2021}
+}`
+    navigator.clipboard?.writeText?.(bibtex)?.then(() => {
+      setBibtexCopied(true)
+      setTimeout(() => setBibtexCopied(false), 2500)
+    })?.catch(() => {})
+  }
 
   async function findSimilar() {
     const requestId = ++recommendationRequestId.current
@@ -61,6 +78,36 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
           <div className="detail-content">
             <div className="tag-list detail-tags">{paper.terms.map((term) => <span className="category-tag" key={term}>{term}</span>)}</div>
             <h2>{paper.title}</h2>
+
+            <div className="detail-actions-bar">
+              <a
+                className="action-pill external-link"
+                href={`https://scholar.google.com/scholar?q=${encodeURIComponent(paper.title)}`}
+                target="_blank"
+                rel="noreferrer"
+                title="Search on Google Scholar"
+              >
+                Google Scholar ↗
+              </a>
+              <a
+                className="action-pill external-link"
+                href={`https://arxiv.org/search/?query=${encodeURIComponent(paper.title)}&searchtype=title`}
+                target="_blank"
+                rel="noreferrer"
+                title="Search on arXiv"
+              >
+                arXiv Search ↗
+              </a>
+              <button
+                className="action-pill bibtex-button"
+                type="button"
+                onClick={copyBibtex}
+                title="Copy BibTeX Citation"
+              >
+                {bibtexCopied ? '✓ Copied BibTeX!' : 'Copy BibTeX'}
+              </button>
+            </div>
+
             <div className="detail-rule" />
             <h3 className="section-kicker">ABSTRACT</h3>
             <p className="detail-abstract">{paper.abstract || 'No abstract text is available for this record.'}</p>
@@ -79,6 +126,18 @@ export default function DetailPanel({ paperId, onClose, onOpenPaper, bookmarked,
                   <article className="recommendation-item" key={item.paper_id}>
                     <button className="recommendation-title" onClick={() => onOpenPaper(item.paper_id)}>{item.title}</button>
                     <div className="tag-list recommendation-tags">{(item.terms || []).slice(0, 3).map((term) => <span className="category-tag" key={term}>{term}</span>)}</div>
+                    
+                    {item.matching_terms && item.matching_terms.length > 0 && (
+                      <div className="concept-overlap">
+                        <span className="concept-label"><Icon name="spark" size={12} /> Key overlap:</span>
+                        <div className="concept-tags">
+                          {item.matching_terms.slice(0, 3).map((term) => (
+                            <span className="concept-pill" key={term}>{term}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <SimilarityScore value={item.similarity} />
                     <p>{item.abstract?.trim() || 'No abstract text is available for this record.'}</p>
                   </article>

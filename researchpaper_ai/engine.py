@@ -68,6 +68,7 @@ class ResearchPaperRecommender:
                 ) from exc
         self.cluster_model: MiniBatchKMeans | None = None
         self.cluster_labels: np.ndarray | None = None
+        self._feature_names: np.ndarray | None = None
 
     @staticmethod
     def _new_vectorizer(min_df, max_features, ngram_range) -> TfidfVectorizer:
@@ -90,6 +91,7 @@ class ResearchPaperRecommender:
         *,
         paper_id: str | None = None,
         query: str | None = None,
+        category: str | None = None,
         top_k: int = 10,
         cluster_aware: bool = False,
         candidate_pool: int = 100,
@@ -132,6 +134,20 @@ class ResearchPaperRecommender:
         if valid_indices.size == 0:
             return []
         scores[valid_indices] = np.clip(scores[valid_indices], 0.0, 1.0)
+
+        if category:
+            cat_norm = category.strip().casefold()
+            valid_indices = np.array(
+                [
+                    i
+                    for i in valid_indices
+                    if any(t.casefold() == cat_norm for t in self.papers[i].terms)
+                ],
+                dtype=int,
+            )
+            if valid_indices.size == 0:
+                return []
+
         count = min(max(top_k, candidate_pool if cluster_aware else top_k), valid_indices.size)
         # A stable score/index tie-break makes results repeatable, including at
         # the top-k boundary where argpartition could select arbitrary ties.
@@ -159,16 +175,34 @@ class ResearchPaperRecommender:
         else:
             candidate_indices = candidate_indices[:top_k]
 
-        return [
-            {
-                "paper_id": self.papers[int(index)].paper_id,
-                "title": self.papers[int(index)].title,
-                "abstract": self.papers[int(index)].abstract,
-                "terms": list(self.papers[int(index)].terms),
-                "similarity": float(scores[int(index)]),
-            }
-            for index in candidate_indices
-        ]
+        feature_names = getattr(self, "_feature_names", None)
+        if feature_names is None:
+            feature_names = self.vectorizer.get_feature_names_out()
+            self._feature_names = feature_names
+
+        results = []
+        for index in candidate_indices:
+            idx = int(index)
+            cand_vec = self.matrix[idx]
+            prod = query_vector.multiply(cand_vec)
+            matching_terms: list[str] = []
+            if prod.nnz > 0:
+                col_indices = prod.indices
+                data_values = prod.data
+                top_pos = np.argsort(-data_values)[:5]
+                matching_terms = [str(feature_names[col_indices[p]]) for p in top_pos]
+
+            results.append(
+                {
+                    "paper_id": self.papers[idx].paper_id,
+                    "title": self.papers[idx].title,
+                    "abstract": self.papers[idx].abstract,
+                    "terms": list(self.papers[idx].terms),
+                    "similarity": float(scores[idx]),
+                    "matching_terms": matching_terms,
+                }
+            )
+        return results
 
     def fit_clusters(
         self,

@@ -147,3 +147,23 @@ def test_artifact_loader_rejects_nonfinite_feature_values(tmp_path):
     with pytest.raises(ValueError, match="non-finite"):
         load_model_artifact(path)
 
+
+def test_recommendation_returns_explainable_matching_terms():
+    papers, _ = clean_records(tiny_papers())
+    engine = ResearchPaperRecommender(papers, min_df=1, max_features=1000)
+    source = next(paper for paper in papers if paper.title == "Graph learning")
+    results = engine.recommend(paper_id=source.paper_id, top_k=2)
+    assert len(results) > 0
+    assert "matching_terms" in results[0]
+    assert isinstance(results[0]["matching_terms"], list)
+    assert any("graph" in term.lower() for term in results[0]["matching_terms"])
+
+
+def test_recommendation_category_filtering():
+    papers, _ = clean_records(tiny_papers())
+    engine = ResearchPaperRecommender(papers, min_df=1, max_features=1000)
+    results = engine.recommend(query="graph", category="cs.LG", top_k=5)
+    assert len(results) > 0
+    assert all("cs.LG" in item["terms"] for item in results)
+
+

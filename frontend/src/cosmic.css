@@ -327,6 +327,166 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .app-footer { padding-inline: 12px; }
   .bookmark-toast { right: 12px; bottom: 12px; width: calc(100vw - 24px); }
 }
+/* Category filter pills */
+.category-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  position: relative;
+  z-index: 2;
+}
+
+.category-filter-pill {
+  appearance: none;
+  border: 1px solid rgb(255 255 255 / 15%);
+  background: rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 80%);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.category-filter-pill:hover {
+  background: rgb(255 255 255 / 16%);
+  color: #fff;
+}
+
+.category-filter-pill.is-active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  box-shadow: 0 0 10px rgb(101 86 183 / 40%);
+}
+
+/* Explainable AI Overlap Concepts */
+.concept-overlap {
+  margin: 10px 0 6px;
+  padding: 6px 10px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.concept-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--brand);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+
+.concept-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.concept-pill {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Similarity Match Badge */
+.match-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(100, 169, 178, 0.15);
+  color: var(--mint);
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 11px;
+  margin-right: 5px;
+}
+
+.score-raw {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Scholar & External Links */
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scholar-link {
+  font-size: 11px;
+  color: var(--muted);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.scholar-link:hover {
+  color: var(--brand);
+  background: var(--surface-soft);
+}
+
+/* Detail Panel Actions */
+.detail-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.action-pill {
+  appearance: none;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.action-pill:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--surface-raised);
+}
+
+.action-pill.bibtex-button {
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+}
+
+/* Saved Papers Export Actions */
+.dossier-export-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

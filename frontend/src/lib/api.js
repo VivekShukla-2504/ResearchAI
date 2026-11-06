@@ -61,9 +61,17 @@ export async function apiRequest(path, options = {}) {
 
 export const api = {
   health: () => apiRequest('/health'),
-  search: (query, limit = 10) => apiRequest(`/papers/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+  search: (query, limit = 10, category = '') => {
+    let url = `/papers/search?q=${encodeURIComponent(query)}&limit=${limit}`
+    if (category) url += `&category=${encodeURIComponent(category)}`
+    return apiRequest(url)
+  },
   paper: (paperId) => apiRequest(`/papers/${encodeURIComponent(paperId)}`),
-  recommendations: (paperId, k = 5) => apiRequest(`/papers/${encodeURIComponent(paperId)}/recommendations?k=${k}`),
+  recommendations: (paperId, k = 5, category = '') => {
+    let url = `/papers/${encodeURIComponent(paperId)}/recommendations?k=${k}`
+    if (category) url += `&category=${encodeURIComponent(category)}`
+    return apiRequest(url)
+  },
   bookmarks: () => apiRequest('/session/bookmarks?limit=100'),
   addBookmark: (paperId) => apiRequest('/session/bookmarks', {
     method: 'POST',

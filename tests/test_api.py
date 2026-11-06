@@ -88,8 +88,13 @@ def test_search_details_and_recommendations():
         search = client.get("/papers/search", params={"q": "graph neural representations", "limit": 2})
         assert search.status_code == 200
         assert len(search.json()["results"]) == 2
+        assert "matching_terms" in search.json()["results"][0]
         assert search.json()["history_saved"] is True
         assert store.searches[0]["query"] == "graph neural representations"
+
+        search_cat = client.get("/papers/search", params={"q": "graph", "category": "cs.AI", "limit": 2})
+        assert search_cat.status_code == 200
+        assert all("cs.AI" in r["terms"] for r in search_cat.json()["results"])
 
         paper = engine.papers[0]
         details = client.get(f"/papers/{paper.paper_id}")

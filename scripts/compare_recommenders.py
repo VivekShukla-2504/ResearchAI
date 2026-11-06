@@ -33,21 +33,25 @@ def _peak_working_set_bytes() -> int | None:
     if sys.platform != "win32":
         return None
 
-    class ProcessMemoryCounters(ctypes.Structure):
-        _fields_ = [
-            ("cb", ctypes.wintypes.DWORD), ("PageFaultCount", ctypes.wintypes.DWORD),
-            ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
-            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("PagedPoolUsage", ctypes.c_size_t),
-            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("NonPagedPoolUsage", ctypes.c_size_t),
-            ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
-        ]
+    try:
+        class ProcessMemoryCounters(ctypes.Structure):
+            _fields_ = [
+                ("cb", ctypes.wintypes.DWORD), ("PageFaultCount", ctypes.wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("PagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("NonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
 
-    counters = ProcessMemoryCounters()
-    counters.cb = ctypes.sizeof(counters)
-    psapi = ctypes.WinDLL("Psapi.dll")
-    kernel32 = ctypes.WinDLL("Kernel32.dll")
-    ok = psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb)
-    return int(counters.PeakWorkingSetSize) if ok else None
+        counters = ProcessMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        psapi = ctypes.WinDLL("Psapi.dll")
+        kernel32 = ctypes.WinDLL("Kernel32.dll")
+        kernel32.GetCurrentProcess.restype = ctypes.wintypes.HANDLE
+        ok = psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb)
+        return int(counters.PeakWorkingSetSize) if ok else None
+    except Exception:
+        return None
 
 
 def _top(scores: np.ndarray, source: int, k: int) -> list[int]:
@@ -86,10 +90,11 @@ def _metrics(rankings: list[list[int]], indices: np.ndarray, relevant: list[set[
     for source, ranking in zip(indices, rankings):
         truth = relevant[int(source)]
         rel = truth[np.asarray(ranking, dtype=np.int32)].astype(np.float32, copy=False)
+        rel_total = max(int(truth.sum()), 1)
         p5.append(float(rel[:5].sum() / 5))
         p10.append(float(rel[:10].sum() / 10))
-        r5.append(float(rel[:5].sum() / max(len(truth), 1)))
-        r10.append(float(rel[:10].sum() / max(len(truth), 1)))
+        r5.append(float(rel[:5].sum() / rel_total))
+        r10.append(float(rel[:10].sum() / rel_total))
         discounts = 1 / np.log2(np.arange(2, len(rel) + 2))
         dcg = float((rel * discounts).sum())
         ideal_count = min(int(truth.sum()), len(rel))
@@ -300,7 +305,7 @@ def main() -> None:
         "validation": _metrics(bm25_val, validation, relevant, len(papers), baseline.matrix),
         "test": _metrics([r[:10] for r in bm25_test], test, relevant, len(papers), baseline.matrix),
         "runtime": {"k1": k1, "b": b, "latency_ms_mean": round(float(np.mean(bm25_test_time)), 3),
-                    "latency_ms_p95": round(float(np.percentile(bm25_test_time), 95), 3),
+                    "latency_ms_p95": round(float(np.percentile(bm25_test_time, 95)), 3),
                     "matrix_bytes": int(bm25.data.nbytes + bm25.indices.nbytes + bm25.indptr.nbytes),
                     "dense_score_vector_bytes": int(len(papers) * 4),
                     "dependency": "none; CountVectorizer plus sparse BM25 weighting"},

@@ -1,0 +1,298 @@
+{
+  "dataset": "data/processed/papers_clean.csv",
+  "baseline_artifact": "artifacts/recommender.joblib",
+  "catalog_size": 41120,
+  "seed": 2026,
+  "query_split": {
+    "validation": 10,
+    "test": 10,
+    "disjoint": true
+  },
+  "relevance": "binary overlap of source-paper terms; weak proxy, not human relevance",
+  "diversity_reference": "mean pairwise cosine distance in preserved baseline TF-IDF space",
+  "candidates": {
+    "tfidf_baseline": {
+      "validation": {
+        "precision_at_5": 0.94,
+        "precision_at_10": 0.95,
+        "recall_at_5": 0.000197,
+        "recall_at_10": 0.000399,
+        "ndcg_at_10": 0.952944,
+        "mrr": 1.0,
+        "catalog_coverage": 0.002432,
+        "diversity": 0.882057
+      },
+      "test": {
+        "precision_at_5": 0.78,
+        "precision_at_10": 0.78,
+        "recall_at_5": 0.000164,
+        "recall_at_10": 0.000328,
+        "ndcg_at_10": 0.775337,
+        "mrr": 0.82,
+        "catalog_coverage": 0.002432,
+        "diversity": 0.898216
+      },
+      "runtime": {
+        "artifact_bytes": 54369642,
+        "matrix_bytes": 43802212,
+        "latency_ms_mean": 142.068,
+        "latency_ms_p95": 157.289,
+        "dense_score_vector_bytes": 164480
+      }
+    },
+    "tfidf_word_unigram": {
+      "validation": {
+        "precision_at_5": 0.94,
+        "precision_at_10": 0.96,
+        "recall_at_5": 0.000198,
+        "recall_at_10": 0.000404,
+        "ndcg_at_10": 0.960531,
+        "mrr": 1.0,
+        "catalog_coverage": 0.002432,
+        "diversity": 0.880393
+      },
+      "test": {
+        "precision_at_5": 0.86,
+        "precision_at_10": 0.79,
+        "recall_at_5": 0.000181,
+        "recall_at_10": 0.000332,
+        "ndcg_at_10": 0.80321,
+        "mrr": 0.875,
+        "catalog_coverage": 0.002432,
+        "diversity": 0.891867
+      },
+      "runtime": {
+        "latency_ms_mean": 36.079,
+        "latency_ms_p95": 39.758,
+        "matrix_bytes": 26615580,
+        "dense_score_vector_bytes": 164480
+      }
+    },
+    "field_tfidf_char": {
+      "validation": {
+        "precision_at_5": 0.96,
+        "precision_at_10": 0.94,
+        "recall_at_5": 0.000202,
+        "recall_at_10": 0.000395,
+        "ndcg_at_10": 0.91706,
+        "mrr": 1.0,
+        "catalog_coverage": 0.024246,
+        "diversity": 0.943701
+      },
+      "test": {
+        "precision_at_5": 0.78,
+        "precision_at_10": 0.83,
+        "recall_at_5": 0.000164,
+        "recall_at_10": 0.000349,
+        "ndcg_at_10": 0.809983,
+        "mrr": 0.814286,
+        "catalog_coverage": 0.002432,
+        "diversity": 0.901514
+      },
+      "runtime": {
+        "latency_ms_mean": 203.979,
+        "latency_ms_p95": 240.099,
+        "matrix_bytes": 96894092,
+        "dense_score_vectors_bytes": 493440
+      }
+    },
+    "bm25": {
+      "validation": {
+        "precision_at_5": 0.9,
+        "precision_at_10": 0.91,
+        "recall_at_5": 0.00019,
+        "recall_at_10": 0.000383,
+        "ndcg_at_10": 0.899133,
+        "mrr": 0.95,
+        "catalog_coverage": 0.024295,
+        "diversity": 0.938399
+      },
+      "test": {
+        "precision_at_5": 0.78,
+        "precision_at_10": 0.82,
+        "recall_at_5": 0.000164,
+        "recall_at_10": 0.000345,
+        "ndcg_at_10": 0.810462,
+        "mrr": 0.883333,
+        "catalog_coverage": 0.002432,
+        "diversity": 0.893247
+      },
+      "runtime": {
+        "k1": 1.5,
+        "b": 0.75,
+        "latency_ms_mean": 25.006,
+        "latency_ms_p95": 29.801,
+        "matrix_bytes": 43802212,
+        "dense_score_vector_bytes": 164480,
+        "dependency": "none; CountVectorizer plus sparse BM25 weighting"
+      }
+    },
+    "tfidf_bm25_rrf": {
+      "validation": {
+        "precision_at_5": 0.9,
+        "precision_at_10": 0.93,
+        "recall_at_5": 0.000189,
+        "recall_at_10": 0.000391,
+        "ndcg_at_10": 0.926528,
+        "mrr": 1.0,
+        "catalog_coverage": 0.002432,
+        "diversity": 0.887618
+      },
+      "test": {
+        "precision_at_5": 0.8,
+        "precision_at_10": 0.8,
+        "recall_at_5": 0.000168,
+        "recall_at_10": 0.000337,
+        "ndcg_at_10": 0.80263,
+        "mrr": 0.883333,
+        "catalog_coverage": 0.002432,
+        "diversity": 0.895739
+      },
+      "runtime": {
+        "method": "RRF k=60; combines rank positions, not raw score scales",
+        "additional_matrix_bytes": 43802212
+      }
+    }
+  },
+  "tuning": {
+    "split": "validation queries only; no test-set selection",
+    "objective": "nDCG@10 under category-overlap proxy",
+    "configs": {
+      "title=0.25,char=0.00,abstract=0.75": {
+        "precision_at_5": 0.96,
+        "precision_at_10": 0.94,
+        "recall_at_5": 0.000202,
+        "recall_at_10": 0.000395,
+        "ndcg_at_10": 0.91706,
+        "mrr": 1.0,
+        "catalog_coverage": 0.024246,
+        "diversity": 0.943701
+      },
+      "title=0.25,char=0.10,abstract=0.65": {
+        "precision_at_5": 0.98,
+        "precision_at_10": 0.96,
+        "recall_at_5": 0.000206,
+        "recall_at_10": 0.000404,
+        "ndcg_at_10": 0.908252,
+        "mrr": 1.0,
+        "catalog_coverage": 0.024222,
+        "diversity": 0.946834
+      },
+      "title=0.25,char=0.20,abstract=0.55": {
+        "precision_at_5": 0.96,
+        "precision_at_10": 0.93,
+        "recall_at_5": 0.000202,
+        "recall_at_10": 0.000391,
+        "ndcg_at_10": 0.89561,
+        "mrr": 1.0,
+        "catalog_coverage": 0.024197,
+        "diversity": 0.949923
+      },
+      "title=0.40,char=0.00,abstract=0.60": {
+        "precision_at_5": 0.94,
+        "precision_at_10": 0.95,
+        "recall_at_5": 0.000198,
+        "recall_at_10": 0.000399,
+        "ndcg_at_10": 0.891425,
+        "mrr": 1.0,
+        "catalog_coverage": 0.024197,
+        "diversity": 0.949012
+      },
+      "title=0.40,char=0.10,abstract=0.50": {
+        "precision_at_5": 0.92,
+        "precision_at_10": 0.93,
+        "recall_at_5": 0.000193,
+        "recall_at_10": 0.000391,
+        "ndcg_at_10": 0.881587,
+        "mrr": 1.0,
+        "catalog_coverage": 0.024125,
+        "diversity": 0.951554
+      },
+      "title=0.40,char=0.20,abstract=0.40": {
+        "precision_at_5": 0.94,
+        "precision_at_10": 0.9,
+        "recall_at_5": 0.000197,
+        "recall_at_10": 0.000378,
+        "ndcg_at_10": 0.87637,
+        "mrr": 1.0,
+        "catalog_coverage": 0.024149,
+        "diversity": 0.952885
+      },
+      "title=0.55,char=0.00,abstract=0.45": {
+        "precision_at_5": 0.96,
+        "precision_at_10": 0.93,
+        "recall_at_5": 0.000202,
+        "recall_at_10": 0.000391,
+        "ndcg_at_10": 0.870114,
+        "mrr": 0.95,
+        "catalog_coverage": 0.024125,
+        "diversity": 0.953077
+      },
+      "title=0.55,char=0.10,abstract=0.35": {
+        "precision_at_5": 0.96,
+        "precision_at_10": 0.9,
+        "recall_at_5": 0.000202,
+        "recall_at_10": 0.000378,
+        "ndcg_at_10": 0.867511,
+        "mrr": 0.95,
+        "catalog_coverage": 0.024173,
+        "diversity": 0.954458
+      },
+      "title=0.55,char=0.20,abstract=0.25": {
+        "precision_at_5": 0.94,
+        "precision_at_10": 0.9,
+        "recall_at_5": 0.000198,
+        "recall_at_10": 0.000378,
+        "ndcg_at_10": 0.870226,
+        "mrr": 1.0,
+        "catalog_coverage": 0.0241,
+        "diversity": 0.954955
+      },
+      "title=0.70,char=0.00,abstract=0.30": {
+        "precision_at_5": 0.96,
+        "precision_at_10": 0.89,
+        "recall_at_5": 0.000202,
+        "recall_at_10": 0.000374,
+        "ndcg_at_10": 0.858729,
+        "mrr": 0.95,
+        "catalog_coverage": 0.024076,
+        "diversity": 0.955895
+      },
+      "title=0.70,char=0.10,abstract=0.20": {
+        "precision_at_5": 0.94,
+        "precision_at_10": 0.89,
+        "recall_at_5": 0.000197,
+        "recall_at_10": 0.000374,
+        "ndcg_at_10": 0.859329,
+        "mrr": 0.95,
+        "catalog_coverage": 0.024125,
+        "diversity": 0.956632
+      },
+      "title=0.70,char=0.20,abstract=0.10": {
+        "precision_at_5": 0.92,
+        "precision_at_10": 0.89,
+        "recall_at_5": 0.000193,
+        "recall_at_10": 0.000374,
+        "ndcg_at_10": 0.860508,
+        "mrr": 1.0,
+        "catalog_coverage": 0.024125,
+        "diversity": 0.957036
+      }
+    },
+    "selected": {
+      "title_weight": 0.25,
+      "char_weight": 0.0,
+      "abstract_weight": 0.75
+    }
+  },
+  "limitations": [
+    "Term overlap is a weak label proxy; these offline results do not establish user-perceived relevance.",
+    "All corpus papers are searchable for each query split; only query IDs are disjoint (transductive retrieval evaluation).",
+    "Validation selection and category-overlap ranking are proxy-driven; candidate category features are omitted to avoid target leakage.",
+    "Diversity uses the same preserved baseline TF-IDF space for all ranked lists.",
+    "Latency is a warm in-process retrieval measurement and excludes network, serialization, and database time."
+  ],
+  "evaluation_runtime_seconds": 57.638,
+  "peak_process_working_set_bytes": null,
+  "peak_process_working_set_mb": null
+}

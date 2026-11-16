@@ -29,3 +29,5 @@ FINAL_PRESENTATION_6_SLIDES.md
 VIVA_PREPARATION_GUIDE.md
 presentation/
 slides/
+*.pptx
+scripts/create_architecture_image.py

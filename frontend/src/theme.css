@@ -140,6 +140,9 @@ body {
 
 .hero {
   min-height: 304px;
+  overflow: visible;
+  position: relative;
+  z-index: 20;
   border: 1px solid rgb(180 218 202 / 10%);
   border-radius: 17px;
   background:

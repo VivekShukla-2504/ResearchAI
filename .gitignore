@@ -30,4 +30,5 @@ VIVA_PREPARATION_GUIDE.md
 presentation/
 slides/
 *.pptx
+*.ipynb
 scripts/create_architecture_image.py
